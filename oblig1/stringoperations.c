@@ -79,13 +79,17 @@ char *string_between(char *s, char c)
         return NULL;
     }
 
-    char *mid = malloc(last + 1);
+    if (last < 1)
+    {
+        last = 1;
+    }
+    char *mid = malloc(last);
 
     for (int i = 1; i < last; i++)
     {
         mid[i - 1] = s[i];
     }
-    mid[last] = 0;
+    mid[last - 1] = 0;
 
     return mid;
 }
