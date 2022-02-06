@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include "the_apple.h"
 
@@ -46,7 +47,7 @@ int removeworm(char *apple)
 
 int main(void)
 {
-    // origial eple er en string literal som ikke kan overskrives med mellomrom (immutable)
+    // original eple er en string literal som ikke kan overskrives med mellomrom (immutable)
     // for oppgave b), antar at det er meningen av vi skal lage kopier
     char *appleCopy = strdup(apple);
 
@@ -58,5 +59,6 @@ int main(void)
 
     int removedSecond = removeworm(appleCopy);
     printf("Second remove: %d\n", removedSecond);
+    free(appleCopy);
     return 0;
 }
