@@ -8,9 +8,9 @@
 #define CGRN "\x1b[32m"
 
 int stringsum(char *s);
-void stringsum2(char *s, int *res);
 int distance_between(char *s, char c);
 char *string_between(char *s, char c);
+void stringsum2(char *s, int *res);
 
 static int test_num = 1;
 
@@ -87,31 +87,28 @@ static void test_stringsum2(char *input, int expected)
 int main(void)
 {
     printf("Testing stringsum()\n");
-    test_stringsum("abcd", 10);
-    test_stringsum("a!", -1);
-    test_stringsum("aAzZ", 54);
-    test_stringsum("ababcDcabcddAbcDaBcabcABCddabCddabcabcddABCabcDd", 120);
+    test_stringsum("Lorem ipsum dolor sit amet", 292);
+    test_stringsum("L0rem 1psum d0l0r s1t amet", -1);
     test_stringsum("", 0);
 
     test_num = 1;
     printf("\nTesting distance_between()\n");
-    test_distance_between("a1234a", 'a', 5);
-    test_distance_between("a1234", 'a', 0);
-    test_distance_between("123456a12334a123a", 'a', 10);
-    test_distance_between("", 'a', -1);
+    test_distance_between("Lorem ipsum dolor sit amet", 'm', 19);
+    test_distance_between("Lorem ipsum dolor sit amet", 'u', 0);
+    test_distance_between("Lorem ipsum dolor sit amet", 'y', -1);
+    test_distance_between("", 'z', -1);
 
     test_num = 1;
     printf("\nTesting string_between()\n");
-    test_string_between("a1234a", 'a', "1234");
-    test_string_between("a1234", 'a', "");
-    test_string_between("A123adette er svaretaasd2qd3asd12", 'a', "dette er svaretaasd2qd3");
-    test_string_between("", 'a', NULL);
+    test_string_between("Lorem ipsum dolor sit amet", 'o', "rem ipsum dol");
+    test_string_between("Lorem ipsum dolor sit amet", 'a', "");
+    test_string_between("Lorem ipsum dolor sit amet", 'y', NULL);
+    test_string_between("", 'z', NULL);
 
     test_num = 1;
     printf("\nTesting stringsum2()\n");
-    test_stringsum2("abcd", 10);
-    test_stringsum2("abcd!", -1);
-    test_stringsum2("bbbdbbbbbdbbdbbbbbddbbbbbdbbdbbbbdbd", 90);
+    test_stringsum2("Lorem ipsum dolor sit amet", 292);
+    test_stringsum2("L0rem 1psum d0l0r s1t amet", -1);
     test_stringsum2("", 0);
 
     return 0;
