@@ -2,6 +2,9 @@
 !/**/
 !*.*
 
+!superblock
+!block_allocation_table
+.vscode
 # Prerequisites
 *.d
 
