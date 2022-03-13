@@ -8,27 +8,38 @@
 
 #define BLOCKSIZE 4096
 
-struct inode* create_file( struct inode* parent, char* name, char readonly, int size_in_bytes )
+struct inode *create_file(struct inode *parent, char *name, char readonly, int size_in_bytes)
 {
     return NULL;
 }
 
-struct inode* create_dir( struct inode* parent, char* name )
+struct inode *create_dir(struct inode *parent, char *name)
 {
     return NULL;
 }
 
-struct inode* find_inode_by_name( struct inode* parent, char* name )
+struct inode *find_inode_by_name(struct inode *parent, char *name)
 {
     return NULL;
 }
 
-struct inode* load_inodes()
+struct inode *load_inodes()
 {
-    return NULL;
+    FILE *fil;
+    int rc;
+
+    fil = fopen("superblock", "rb");
+    if (fil == NULL)
+    {
+        perror("fopen");
+        exit(EXIT_FAILURE);
+    }
+
+    fclose(fil);
+    return NULL; // root
 }
 
-void fs_shutdown( struct inode* inode )
+void fs_shutdown(struct inode *inode)
 {
 }
 
@@ -37,30 +48,30 @@ void fs_shutdown( struct inode* inode )
  */
 static int indent = 0;
 
-void debug_fs( struct inode* node )
+void debug_fs(struct inode *node)
 {
-    if( node == NULL ) return;
-    for( int i=0; i<indent; i++ )
+    if (node == NULL)
+        return;
+    for (int i = 0; i < indent; i++)
         printf("  ");
-    if( node->is_directory )
+    if (node->is_directory)
     {
-        printf("%s (id %d)\n", node->name, node->id );
+        printf("%s (id %d)\n", node->name, node->id);
         indent++;
-        for( int i=0; i<node->num_entries; i++ )
+        for (int i = 0; i < node->num_entries; i++)
         {
-            struct inode* child = (struct inode*)node->entries[i];
-            debug_fs( child );
+            struct inode *child = (struct inode *)node->entries[i];
+            debug_fs(child);
         }
         indent--;
     }
     else
     {
-        printf("%s (id %d size %db blocks ", node->name, node->id, node->filesize );
-        for( int i=0; i<node->num_entries; i++ )
+        printf("%s (id %d size %db blocks ", node->name, node->id, node->filesize);
+        for (int i = 0; i < node->num_entries; i++)
         {
             printf("%d ", (int)node->entries[i]);
         }
         printf(")\n");
     }
 }
-

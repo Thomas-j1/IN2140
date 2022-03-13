@@ -4,6 +4,7 @@
 
 !superblock
 !block_allocation_table
+!makefile
 .vscode
 # Prerequisites
 *.d
