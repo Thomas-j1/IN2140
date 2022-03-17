@@ -102,16 +102,17 @@ void printiNodes(FILE *fp)
         /* obuff can't be used because allocation failed */
         exit(EXIT_FAILURE);
     }
+    int *name_len;
     fread(&obuff->id, sizeof(int), 1, fp);
-    fread(&obuff->name_len, sizeof(int), 1, fp);
-    obuff->name = malloc(obuff->name_len);
-    fread(obuff->name, obuff->name_len, 1, fp);
+    fread(name_len, sizeof(int), 1, fp);
+    obuff->name = malloc(*name_len);
+    fread(obuff->name, *name_len, 1, fp);
     fread(&obuff->is_directory, sizeof(char), 1, fp);
     fread(&obuff->is_readonly, sizeof(char), 1, fp);
     fread(&obuff->filesize, sizeof(int), 1, fp);
     fread(&obuff->num_entries, sizeof(int), 1, fp);
-    obuff->entries = malloc(64 * obuff->num_entries);
-    fread(obuff->entries, obuff->num_entries * 8, 1, fp);
+    obuff->entries = malloc(sizeof(size_t) * obuff->num_entries);
+    fread(obuff->entries, obuff->num_entries * sizeof(size_t), 1, fp);
     if (obuff->is_directory)
     {
         for (int i = 0; i < obuff->num_entries; i++)
@@ -122,7 +123,7 @@ void printiNodes(FILE *fp)
 
     // fread(&obuff->entries, sizeof(obuff->entries), 1, fp);
     printf("id: %d, name_len: %d, name: %s, isDir: %d, isReadOnly: %d, fileSize: %d, num_entries: %d\n",
-           obuff->id, obuff->name_len, obuff->name, obuff->is_directory, obuff->is_readonly,
+           obuff->id, *name_len, obuff->name, obuff->is_directory, obuff->is_readonly,
            obuff->filesize, obuff->num_entries);
     free(obuff); /* free whatever you allocated after finished using them */
 }
@@ -165,7 +166,7 @@ void myReadFile(char *filename)
 int main(void)
 {
     // ReadFile("prekode/load_example1/superblock");
-    myReadFile("prekode/load_example1/superblock");
+    myReadFile("prekode/load_example2/superblock");
 
     return EXIT_SUCCESS;
 }
