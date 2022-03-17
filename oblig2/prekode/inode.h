@@ -16,13 +16,12 @@
 struct inode
 {
 	int id;
-	int name_len;
 	char *name;
 	char is_directory;
 	char is_readonly;
 	int filesize;
 	int num_entries;
-	size_t *entries;
+	size_t* entries;
 };
 
 /* Create a file below the inode parent. Parent must
@@ -32,27 +31,27 @@ struct inode
  * disk to store all of these bytes.
  * Returns a pointer to file's inodes.
  */
-struct inode *create_file(struct inode *parent, char *name, char readonly, int size_in_bytes);
+struct inode* create_file( struct inode* parent, char* name, char readonly, int size_in_bytes );
 
 /* Create a directory below the inode parent. Parent must
  * be a directory.
  * Returns a pointer to file's inodes.
  */
-struct inode *create_dir(struct inode *parent, char *name);
+struct inode* create_dir( struct inode* parent, char* name );
 
 /* Check all the inodes that are directly referenced by
  * the node parent. If one of them has the name "name",
  * its inode pointer is returned.
  * parent must be directory.
  */
-struct inode *find_inode_by_name(struct inode *parent, char *name);
+struct inode* find_inode_by_name( struct inode* parent, char* name );
 
 /* Read the file superblock and create an inode in memory
  * for every inode that is stored in the file. Set the pointers
  * between inodes correctly.
  * The file superblock remains unchanged.
  */
-struct inode *load_inodes();
+struct inode* load_inodes();
 
 /* This function releases all dynamically allocated memory
  * recursively for all the referenced inodes are visited
@@ -61,13 +60,14 @@ struct inode *load_inodes();
  * The simulated disk and the file superblock are
  * not changed.
  */
-void fs_shutdown(struct inode *node);
+void fs_shutdown( struct inode* node );
 
 /* This function is handed out.
  *
  * It prints the node that is receives as a parameter,
  * and recurivesly all inodes that are stored below it.
  */
-void debug_fs(struct inode *node);
+void debug_fs( struct inode* node );
 
 #endif
+

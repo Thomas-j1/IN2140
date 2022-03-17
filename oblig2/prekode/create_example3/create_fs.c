@@ -1,12 +1,10 @@
-#include "../inode.h"
-#include "../allocation.h"
+#include "inode.h"
+#include "allocation.h"
 
 #include <stdio.h>
 
 int main()
 {
-    int error;
-
     /* format_disk() makes sure that the simulation
      * disk is empty. It creates a file named
      * block_allocation_table that contains only
@@ -19,26 +17,26 @@ int main()
      */
     debug_disk();
 
-    struct inode *root = create_dir(NULL, "/");
-    struct inode *dir_root = create_dir(root, "root");
-    struct inode *dir_home = create_dir(root, "home");
-    struct inode *dir_guest = create_dir(dir_home, "guest");
-    struct inode *dir_user = create_dir(dir_home, "user");
-    struct inode *dir_print = create_dir(dir_home, "print");
-    struct inode *dir_down = create_dir(dir_user, "Download");
+    struct inode* root      = create_dir( NULL, "/" );
+    struct inode* dir_root  = create_dir( root, "root" );
+    struct inode* dir_home  = create_dir( root, "home" );
+    struct inode* dir_guest = create_dir( dir_home, "guest" );
+    struct inode* dir_user  = create_dir( dir_home, "user" );
+    struct inode* dir_down  = create_dir( dir_user, "Download" );
+    create_dir( dir_home, "print" );
 
-    create_file(dir_root, "bashrc", 1, 100);
-    create_file(dir_root, "profile", 1, 100);
-    create_file(dir_guest, "bashrc", 1, 100);
-    create_file(dir_guest, "profile", 1, 100);
-    create_file(dir_user, "bashrc", 1, 100);
-    create_file(dir_user, "profile", 1, 100);
-    create_file(dir_down, "oblig2", 1, 163033);
+    create_file( dir_root,  "bashrc", 1, 100 );
+    create_file( dir_root,  "profile", 1, 100 );
+    create_file( dir_guest, "bashrc", 1, 100 );
+    create_file( dir_guest, "profile", 1, 100 );
+    create_file( dir_user,  "bashrc", 1, 100 );
+    create_file( dir_user,  "profile", 1, 100 );
+    create_file( dir_down,  "oblig2", 1, 163033 );
 
-    debug_fs(root);
+    debug_fs( root );
     debug_disk();
 
-    fs_shutdown(root);
+    fs_shutdown( root );
 
     printf("+++++++++++++++++++++++++++++++++++++++++++\n");
     printf("+ All inodes structures have been         +\n");
@@ -47,3 +45,4 @@ int main()
     printf("+ are stored in block_allocation_table    +\n");
     printf("+++++++++++++++++++++++++++++++++++++++++++\n");
 }
+

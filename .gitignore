@@ -6,6 +6,7 @@
 !block_allocation_table
 !makefile
 .vscode
+/oblig2/prekodeGammel
 # Prerequisites
 *.d
 
