@@ -158,7 +158,7 @@ void myReadFile(char *filename)
     printf("id: %d, name_len: %d, name: %s, isDir: %d, isReadOnly: %d, fileSize: %d, num_entries: %d\n",
            obuff->id, obuff->name_len, obuff->name, obuff->is_directory, obuff->is_readonly,
            obuff->filesize, obuff->num_entries);
-    free(obuff); /* free whatever you allocated after finished using them */
+    free(obuff);  free whatever you allocated after finished using them */
 
     fclose(fp);
 }
@@ -166,7 +166,7 @@ void myReadFile(char *filename)
 int main(void)
 {
     // ReadFile("prekode/load_example1/superblock");
-    myReadFile("prekode/load_example2/superblock");
+    myReadFile("prekode/load_example1/superblock");
 
     return EXIT_SUCCESS;
 }
