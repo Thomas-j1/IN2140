@@ -12,7 +12,6 @@ int main()
     struct inode *root = load_inodes();
     debug_fs(root);
     debug_disk();
-    exit(EXIT_SUCCESS);
     printf("===================================\n");
     printf("= Trying to find some files.      =\n");
     printf("===================================\n");

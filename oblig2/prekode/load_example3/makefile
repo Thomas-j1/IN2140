@@ -1,4 +1,4 @@
-CFLAGS = -g -std=gnu11 -Wall -Wextra -I..
+CFLAGS = -g -std=gnu11 -Wall -Wextra -I.. -lm
 VFLAGS = --leak-check=full --track-origins=yes --show-leak-kinds=all --malloc-fill=0x40 --free-fill=0x23
 BIN = load
 FILES = ../allocation.c ../inode.c
