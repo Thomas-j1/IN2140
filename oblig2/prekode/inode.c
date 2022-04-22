@@ -8,7 +8,6 @@
 #include <math.h>
 
 #define BLOCKSIZE 4096
-int fileBlockNumber = 0;
 int id = 0;
 
 int isDuplicate(struct inode *parent, char *name)
@@ -36,6 +35,11 @@ struct inode *create_file(struct inode *parent, char *name, char readonly, int s
         return NULL;
     }
     struct inode *new = malloc(sizeof(struct inode));
+    if (new == NULL)
+    {
+        fprintf(stderr, "Malloc error");
+        exit(EXIT_FAILURE);
+    }
     new->id = id++;
     new->name = strdup(name);
     new->is_directory = 0;
@@ -67,6 +71,11 @@ struct inode *create_dir(struct inode *parent, char *name)
     }
 
     struct inode *new = malloc(sizeof(struct inode));
+    if (new == NULL)
+    {
+        fprintf(stderr, "Malloc error");
+        exit(EXIT_FAILURE);
+    }
     new->id = id++;
     new->name = strdup(name);
     new->is_directory = 1;
@@ -114,6 +123,7 @@ struct inode *loadNodesHelper(FILE *fp)
     struct inode *node = malloc(sizeof(struct inode));
     if (node == NULL)
     {
+        fprintf(stderr, "Malloc error");
         exit(EXIT_FAILURE);
     }
 
@@ -145,7 +155,7 @@ struct inode *loadNodesHelper(FILE *fp)
 
             node->entries[i] = (size_t)oppforing[i];
         }
-        }
+    }
     free(oppforing);
     return node;
 }
