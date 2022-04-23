@@ -9,7 +9,19 @@ void check_error(int ret, char *msg)
     }
 }
 
-int convertLossProbability()
+float convert_loss_probability(int n)
 {
-    return 0;
+    float res = (float)n;
+    res = res / 100.0;
+    return res;
+}
+
+void setup_loss_probability(const char *arg)
+{
+    unsigned short loss_probability;
+    float floss_probability;
+
+    loss_probability = atoi(arg);
+    floss_probability = convert_loss_probability(loss_probability);
+    set_loss_probability(floss_probability);
 }

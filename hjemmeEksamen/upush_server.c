@@ -2,6 +2,10 @@
 
 #define BUFSIZE 250
 
+/**
+ * @brief data struct for clients
+ *
+ */
 struct client
 {
     int port;
@@ -12,9 +16,9 @@ struct client
 int main(int argc, char const *argv[])
 {
     int so, rc;
-    unsigned short port, loss_probability;
+    unsigned short port;
     char buf[BUFSIZE];
-    struct in_addr ipadress;
+    // struct in_addr ipadress;
     struct sockaddr_in my_addr, client_addr;
 
     if (argc < 3)
@@ -24,10 +28,10 @@ int main(int argc, char const *argv[])
     }
 
     port = atoi(argv[1]);
-    loss_probability = atoi(argv[2]);
+    setup_loss_probability(argv[2]);
 
     my_addr.sin_family = AF_INET;
-    my_addr.sin_port = htons(1234);
+    my_addr.sin_port = htons(port);
     my_addr.sin_addr.s_addr = INADDR_ANY;
 
     so = socket(AF_INET, SOCK_DGRAM, 0);
@@ -37,11 +41,15 @@ int main(int argc, char const *argv[])
     check_error(rc, "bind");
 
     socklen_t socklen = sizeof(struct sockaddr_in);
-    rc = recvfrom(so, buf, BUFSIZE - 1, 0, (struct sockaddr *)&client_addr, &socklen);
-    check_error(rc, "recvfrom");
 
-    buf[rc] = '\0';
-    printf("Received %d bytes: \n'%s'\n", rc, buf);
+    while (strcmp(buf, "q\n"))
+    {
+        rc = recvfrom(so, buf, BUFSIZE - 1, 0, (struct sockaddr *)&client_addr, &socklen);
+        check_error(rc, "recvfrom");
+
+        buf[rc] = '\0';
+        printf("Received %d bytes: \n%s", rc, buf);
+    }
 
     close(so);
     return EXIT_SUCCESS;
