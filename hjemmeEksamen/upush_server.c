@@ -28,21 +28,48 @@ char *lookup_nick(char *nick, char *number)
     return 0;
 }
 
+/**
+ * @brief checks clients for nick
+ *
+ * @param nick
+ * @return int index of client if exist else -1
+ */
+int nick_exists(char *nick)
+{
+    for (int i = 0; i < numberOfClients; i++)
+    {
+        if (!strcmp(clients[i].nick, nick))
+        {
+            return i;
+        }
+    }
+    return -1;
+}
+
 char *register_client(char *nick, struct sockaddr_in client_addr)
 {
+    int currIndex;
     char *response;
-    clients = (client *)realloc(clients, sizeof(client) * (++numberOfClients));
-    check_malloc_error(clients);
-    int currIndex = numberOfClients - 1;
+    int exists = nick_exists(nick);
+    if (exists < 0)
+    {
+        clients = (client *)realloc(clients, sizeof(client) * (++numberOfClients));
+        check_malloc_error(clients);
+        currIndex = numberOfClients - 1;
+        strcpy(clients[currIndex].nick, nick);
+    }
+    else // overwrite nick
+    {
+        currIndex = exists;
+    }
 
-    strcpy(clients[currIndex].nick, nick);
     memcpy(&clients[currIndex].ip, inet_ntoa(client_addr.sin_addr), INET_ADDRSTRLEN);
     clients[currIndex].port = (int)ntohs(client_addr.sin_port);
 
     printf("Registered client %s:\n  ip: %s\n  port: %d\n",
            clients[currIndex].nick, clients[currIndex].ip, clients[currIndex].port);
 
-    response = "done";
+    response = "OK";
     return response;
 }
 
@@ -50,7 +77,10 @@ void print_clients()
 {
     printf("Clients: \n");
     for (int i = 0; i < numberOfClients; i++)
-        printf(" Client %s:\n  ip: %s\n  port: %d\n", clients[i].nick, clients[i].ip, clients[i].port);
+    {
+        printf(" Client %s:\n  ip: %s\n  port: %d\n",
+               clients[i].nick, clients[i].ip, clients[i].port);
+    }
 }
 
 /**
@@ -70,17 +100,23 @@ char *handle_response(char *buf, struct sockaddr_in client_addr)
     char *operation = strtok(NULL, " ");
     char *nick = strtok(NULL, " ");
 
-    if (!strcmp(operation, "REG"))
+    response = malloc(30);
+
+    if (pkt == NULL || number == NULL || operation == NULL || nick == NULL)
     {
-        response = register_client(nick, client_addr);
+        sprintf(response, "WRONG FORMAT");
+    }
+    else if (!strcmp(operation, "REG"))
+    {
+        sprintf(response, "ACK %s %s", number, register_client(nick, client_addr));
     }
     else if (!strcmp(operation, "LOOKUP"))
     {
-        response = lookup_nick(nick, number);
+        // response = lookup_nick(nick, number);
     }
     else
     {
-        response = "WRONG FORMAT";
+        sprintf(response, "ACK %s ERROR", number);
     }
 
     return response;
@@ -89,7 +125,7 @@ char *handle_response(char *buf, struct sockaddr_in client_addr)
 int main(int argc, char const *argv[])
 {
 
-    int so, rc;
+    int so, rc, wc;
     unsigned short port;
     char buf[BUFSIZE], *response;
     // struct in_addr ipadress;
@@ -128,6 +164,11 @@ int main(int argc, char const *argv[])
         {
             response = handle_response(buf, client_addr);
             printf("Sending response: %s\n\n", response);
+
+            wc = sendto(so, response, strlen(response), 0, (struct sockaddr *)&client_addr, sizeof(struct sockaddr_in));
+            check_error(wc, "sendto");
+
+            free(response);
         }
     }
 
