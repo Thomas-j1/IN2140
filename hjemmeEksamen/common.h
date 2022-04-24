@@ -8,6 +8,8 @@
 #include <arpa/inet.h>
 #include <sys/select.h>
 
+#define BUFSIZE 250
+
 /**
  * @brief checks return value for error
  *  & if error calls perror with msg and exits
@@ -16,6 +18,14 @@
  * @param msg perror
  */
 void check_error(int ret, char *msg);
+
+/**
+ * @brief checks malloc if malloc return is NULL,
+ * if true prints error to stderr & exits
+ *
+ * @param ptr
+ */
+void check_malloc_error(void *ptr);
 
 /**
  * @brief convert percentage to float

@@ -9,6 +9,15 @@ void check_error(int ret, char *msg)
     }
 }
 
+void check_malloc_error(void *ptr)
+{
+    if (ptr == NULL)
+    {
+        fprintf(stderr, "Malloc error");
+        exit(EXIT_FAILURE);
+    }
+}
+
 float convert_loss_probability(int n)
 {
     float res = (float)n;

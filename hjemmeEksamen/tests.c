@@ -24,9 +24,58 @@ void test_convert_loss_probability()
            a, ar, b, br, c, cr, d, dr);
 }
 
+char *handle_response(char *buf)
+{
+    char *response, mBuf[strlen(buf) + 1];
+    strcpy(mBuf, buf);
+    char *pkt = strtok(mBuf, " ");
+    printf("pkt: %s\n", pkt);
+    char *number = strtok(NULL, " ");
+    printf("number: %s\n", number);
+    char *operation = strtok(NULL, " ");
+    char *nick = strtok(NULL, " ");
+
+    if (!strcmp(operation, "REG"))
+    {
+        printf("registering %s\n", nick);
+        response = "registered";
+    }
+    else if (!strcmp(operation, "LOOKUP"))
+    {
+        printf("looking up %s\n", nick);
+        response = "looked up";
+    }
+    else
+    {
+        response = "WRONG FORMAT";
+    }
+
+    return response;
+}
+
+void test_handle_response()
+{
+    char *a = handle_response("PKT 0 REG bob");
+    char *b = handle_response("PKT 0 REG alice");
+    char *c = handle_response("PKT 1 LOOKUP bob");
+
+    printf("Responses: %s, %s, %s\n", a, b, c);
+}
+
+/**
+ *   Registration message: "PKT number REG nick"
+ *   Registration ok: "ACK number OK"
+ *   Lookup message: "PKT number LOOKUP nick"
+ *   Lookup fail response: "ACK number NOT FOUND"
+ *   Lookup success response: "ACK number NICK nick IP address PORT port"
+ *   Text message: "PKT number FROM fromnick TO tonick MSG text"
+ *   Text response: "ACK number [OK/WRONG NAME/WRONG FORMAT]"
+ */
+
 int main(void)
 {
-    test_convert_loss_probability();
+    // test_convert_loss_probability();
+    test_handle_response();
     /* code */
     return 0;
 }
