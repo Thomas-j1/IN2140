@@ -14,20 +14,6 @@ typedef struct client
 client *clients;
 int numberOfClients = 0;
 
-char *lookup_nick(char *nick, char *number)
-{
-    /* char response[40];
-    if (lookup_nick(clients, nick, number))
-    {
-        sprintf(response, "ACK %s OK", number);
-    }
-    else
-    {
-        sprintf(response, "ACK number NICK nick IP address PORT port", number);
-    } */
-    return 0;
-}
-
 /**
  * @brief checks clients for nick
  *
@@ -44,6 +30,20 @@ int nick_exists(char *nick)
         }
     }
     return -1;
+}
+
+void lookup_nick(char *nick, char *response, char *number)
+{
+    int exists = nick_exists(nick);
+    if (exists < 0)
+    {
+        sprintf(response, "ACK %s NOT FOUND", number);
+    }
+    else
+    {
+        sprintf(response, "ACK %s NICK %s IP %s PORT %d",
+                number, clients[exists].nick, clients[exists].ip, clients[exists].port);
+    }
 }
 
 char *register_client(char *nick, struct sockaddr_in client_addr)
@@ -89,7 +89,7 @@ void print_clients()
  * @param buf read buffer
  * @param clients clients ptr
  * @param client_addr client socket
- * @return char response to send back to client
+ * @return char response to send back to client, must be freed
  */
 char *handle_response(char *buf, struct sockaddr_in client_addr)
 {
@@ -100,7 +100,8 @@ char *handle_response(char *buf, struct sockaddr_in client_addr)
     char *operation = strtok(NULL, " ");
     char *nick = strtok(NULL, " ");
 
-    response = malloc(30);
+    response = malloc(190);
+    check_malloc_error(response);
 
     if (pkt == NULL || number == NULL || operation == NULL || nick == NULL)
     {
@@ -112,7 +113,7 @@ char *handle_response(char *buf, struct sockaddr_in client_addr)
     }
     else if (!strcmp(operation, "LOOKUP"))
     {
-        // response = lookup_nick(nick, number);
+        lookup_nick(nick, response, number);
     }
     else
     {

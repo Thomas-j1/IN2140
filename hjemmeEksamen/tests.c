@@ -70,6 +70,7 @@ void test_handle_response()
  *   Lookup success response: "ACK number NICK nick IP address PORT port"
  *   Text message: "PKT number FROM fromnick TO tonick MSG text"
  *   Text response: "ACK number [OK/WRONG NAME/WRONG FORMAT]"
+ *   PKT 0 REG bob\nPKT 0 REG alice\nPKT 1 LOOKUP bob\PKT 1 LOOKUP bobo\nq
  */
 
 int main(void)
