@@ -4,7 +4,7 @@ int main(int argc, char const *argv[])
 {
     int so, rc;
     unsigned short port;
-    char buf[BUFSIZE], *msg;
+    char buf[BUFSIZE];
     fd_set set;
     struct in_addr ip_addr;
     struct sockaddr_in my_addr, dest_addr;
@@ -39,12 +39,12 @@ int main(int argc, char const *argv[])
     rc = bind(so, (struct sockaddr *)&my_addr, sizeof(struct sockaddr_in));
     check_error(rc, "bind");
 
-    msg = "PKT 0 REG bob\nPKT 0 REG alice\nPKT 1 LOOKUP bob\nPKT 1 LOOKUP bobo";
+    strcpy(buf, argv[2]);
     rc = sendto(so,
-                msg,
-                strlen(msg),
+                buf,
+                strlen(buf),
                 0,
-                (struct sockaddr *)&my_addr,
+                (struct sockaddr *)&dest_addr,
                 sizeof(struct sockaddr_in));
     check_error(rc, "sendto");
 
