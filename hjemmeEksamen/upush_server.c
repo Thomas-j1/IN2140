@@ -131,6 +131,8 @@ int main(int argc, char const *argv[])
     char buf[BUFSIZE], *response;
     // struct in_addr ipadress;
     struct sockaddr_in my_addr, client_addr;
+    fd_set mySet;
+    // struct timeval tv;
     socklen_t socklen = sizeof(struct sockaddr_in);
 
     if (argc < 3)
@@ -152,17 +154,28 @@ int main(int argc, char const *argv[])
     rc = bind(so, (struct sockaddr *)&my_addr, sizeof(struct sockaddr_in));
     check_error(rc, "bind");
 
+    FD_ZERO(&mySet);
+
     memset(buf, 0, BUFSIZE);
     while (strcmp(buf, "q"))
     {
-        rc = recvfrom(so, buf, BUFSIZE - 1, 0, (struct sockaddr *)&client_addr, &socklen);
-        check_error(rc, "recvfrom");
+        FD_SET(so, &mySet);
 
-        buf[rc] = '\0';
-        buf[strcspn(buf, "\n")] = 0; // if /n overwrite with 0
-        printf("Received %d bytes: %s\n", rc, buf);
-        if (strcmp(buf, "q"))
+        if (FD_ISSET(so, &mySet))
         {
+            rc = select(FD_SETSIZE + 1, &mySet, NULL, NULL, NULL); //&tv);
+            check_error(rc, "select");
+
+            rc = recvfrom(so, buf, BUFSIZE - 1, 0, (struct sockaddr *)&client_addr, &socklen);
+            check_error(rc, "recvfrom");
+
+            buf[rc] = '\0';
+            buf[strcspn(buf, "\n")] = 0; // if /n overwrite with 0
+            printf("Received %d bytes: %s\n", rc, buf);
+            if (!strcmp(buf, "q"))
+            {
+                break;
+            }
             response = handle_response(buf, client_addr);
             printf("Sending response: %s\n\n", response);
 
