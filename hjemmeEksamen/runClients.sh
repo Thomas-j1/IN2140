@@ -1,4 +1,4 @@
 for i in {1..5}
 do
-    gnome-terminal --tab --title="client $i" -- bash -c "./upush_client 555$i 'PKT 0 REG name$i';"
+    gnome-terminal --tab --title="client $i" -- bash -c "./upush_client name$i 127.0.0.1 4321 10 10;"
 done

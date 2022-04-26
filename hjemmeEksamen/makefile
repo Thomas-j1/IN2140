@@ -25,10 +25,10 @@ upush_client.o: upush_client.c
 	gcc $(CFLAGS) -c upush_client.c
 
 runClient: upush_client
-	./upush_client 4321 20
+	./upush_client runClient 127.0.0.1 4321 10 10
 
 valClient: upush_client
-	valgrind $(VFLAGS) ./upush_client 4322 20
+	valgrind $(VFLAGS) ./upush_client valgrind 127.0.0.1 4321 10 10
 
 tests: tests.o $(sharedFiles)
 	gcc $(CFLAGS) tests.c $(sharedFiles) -o tests
