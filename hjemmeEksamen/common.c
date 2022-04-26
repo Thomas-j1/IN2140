@@ -34,3 +34,17 @@ void setup_loss_probability(const char *arg)
     floss_probability = convert_loss_probability(loss_probability);
     set_loss_probability(floss_probability);
 }
+
+void send_message(int so, struct sockaddr_in dest_addr, char *msg)
+{
+    int rc;
+    rc = sendto(so,
+                msg,
+                strlen(msg),
+                0,
+                (struct sockaddr *)&dest_addr,
+                sizeof(struct sockaddr_in));
+    check_error(rc, "sendto");
+
+    printf("Sent message: %s\n", msg);
+}

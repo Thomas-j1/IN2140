@@ -9,6 +9,7 @@
 #include <sys/select.h>
 
 #define BUFSIZE 250
+#define MAXBUFSIZE 1600
 
 /**
  * @brief checks return value for error
@@ -41,5 +42,7 @@ float convert_loss_probability(int n);
  * @param arg loss probability argument from main
  */
 void setup_loss_probability(const char *arg);
+
+void send_message(int so, struct sockaddr_in dest_addr, char *msg);
 
 #endif

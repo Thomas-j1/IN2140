@@ -3,31 +3,137 @@
 #define MAXMSGSIZE 1400
 
 int packetNumber = 0;
+struct sockaddr_in current_dest_addr, server_addr;
+char const *my_nick;
+char currText[MAXMSGSIZE];
 
 void register_with_server(const char *nick, int so, struct sockaddr_in dest_addr)
 {
     char buf[BUFSIZE];
-    int rc;
 
     sprintf(buf, "PKT %d REG %s", packetNumber++, nick);
 
-    rc = sendto(so,
-                buf,
-                strlen(buf),
-                0,
-                (struct sockaddr *)&dest_addr,
-                sizeof(struct sockaddr_in));
-    check_error(rc, "sendto");
+    send_message(so, dest_addr, buf);
 }
 
-void handle_stdin(int so, struct sockaddr_in dest_addr)
+void create_sock_addr(char *ip, char *port)
 {
-    char buf[MAXMSGSIZE]; // + strlen(nick)
+    struct sockaddr_in addr;
+    struct in_addr ip_addr;
     int rc;
-    fgets(buf, BUFSIZE, stdin);
+
+    rc = inet_pton(AF_INET, ip, &ip_addr);
+    check_error(rc, "inet_pton");
+    if (rc == 0)
+    {
+        fprintf(stderr, "IP address not valid\n");
+        exit(EXIT_FAILURE);
+    }
+
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(atoi(port));
+    addr.sin_addr = ip_addr;
+
+    current_dest_addr = addr;
+}
+
+void handle_socket(int so)
+{
+    int rc;
+    char rbuf[MAXBUFSIZE], sbuf[MAXBUFSIZE], ackBuf[BUFSIZE];
+    struct sockaddr_in dest_addr;
+    socklen_t socklen = sizeof(struct sockaddr_in);
+
+    rc = recvfrom(so, rbuf, MAXBUFSIZE - 1, 0, (struct sockaddr *)&dest_addr, &socklen);
+    check_error(rc, "recvfrom");
+
+    rbuf[rc] = '\0';
+    rbuf[strcspn(rbuf, "\n")] = 0;
+    printf("Received %d bytes: %s\n", rc, rbuf);
+
+    char *type = strtok(rbuf, " ");
+    char *number = strtok(NULL, " ");
+
+    if (type == NULL || number == NULL)
+    {
+        send_message(so, dest_addr, "WRONG FORMAT");
+    }
+    else if (!strcmp(type, "ACK"))
+    {
+        // handle ack from number
+        char *action = strtok(NULL, " ");
+
+        if (!strcmp(action, "OK")) // handle number from who
+        {
+        }
+        else if (!strcmp(action, "NOT")) // did not find client
+        {
+        }
+        else if (!strcmp(action, "NICK")) // found nickname
+        {
+            char *nick = strtok(NULL, " ");
+            strtok(NULL, " "); // IP
+            char *ip = strtok(NULL, " ");
+            strtok(NULL, " "); // PORT
+            char *port = strtok(NULL, " ");
+
+            create_sock_addr(ip, port);
+            sprintf(sbuf, "PKT %d FROM %s TO %s MSG %s", packetNumber, my_nick, nick, currText);
+            send_message(so, current_dest_addr, sbuf);
+        }
+    }
+    else if (!strcmp(type, "PKT"))
+    {
+        // handle PKT
+        strtok(NULL, " "); // FROM
+        char *fNick = strtok(NULL, " ");
+        strtok(NULL, " "); // TO
+        char *mNick = strtok(NULL, " ");
+        strtok(NULL, " "); // MSG
+        char msg[MAXMSGSIZE], *msgToken;
+        msgToken = strtok(NULL, " ");
+        memset(msg, 0, sizeof(msg));
+        while (msgToken != NULL)
+        {
+            sprintf(msg + strlen(msg), "%s ", msgToken);
+            msgToken = strtok(NULL, " ");
+        }
+        msg[strlen(msg) - 1] = 0; // remove trailing whitespace
+
+        sprintf(ackBuf, "ACK %s OK", number);
+        send_message(so, dest_addr, ackBuf);
+
+        printf("%s: %s\n", fNick, msg);
+    }
+}
+
+int handle_stdin(int so)
+{
+    char buf[MAXBUFSIZE], lookBuf[BUFSIZE]; // + strlen(nick)
+    char c;
+    fgets(buf, MAXBUFSIZE, stdin);
     buf[strcspn(buf, "\n")] = 0; // if /n overwrite with 0
-    rc = sendto(so, buf, strlen(buf), 0, (struct sockaddr *)&dest_addr, sizeof(struct sockaddr_in));
-    check_error(rc, "sendto");
+    // while ((c = getchar()) != '\n' && c != EOF)
+    //   ; // remove excess buf
+
+    if (!strcmp(buf, "QUIT"))
+    {
+        return 0;
+    }
+    else // look for nick and send message
+    {
+        char mBuf[strlen(buf) + 1];
+        strcpy(mBuf, buf);
+
+        char *nick = strtok(mBuf + 1, " ");
+        strcpy(currText, buf + strlen(mBuf) + 1); // copy rest of message
+
+        sprintf(lookBuf, "PKT %d LOOKUP %s", packetNumber++, nick);
+
+        send_message(so, server_addr, lookBuf);
+
+        return 1;
+    }
 }
 
 int main(int argc, char const *argv[])
@@ -38,7 +144,7 @@ int main(int argc, char const *argv[])
     char const *nick, *server_ip, *timeout;
     fd_set set;
     struct in_addr ip_addr;
-    struct sockaddr_in my_addr, dest_addr;
+    struct sockaddr_in my_addr;
 
     if (argc < 6)
     {
@@ -47,6 +153,7 @@ int main(int argc, char const *argv[])
     }
 
     nick = argv[1];
+    my_nick = nick;
     server_ip = argv[2];
     port = atoi(argv[3]);
     timeout = argv[4];
@@ -67,20 +174,21 @@ int main(int argc, char const *argv[])
     my_addr.sin_port = htons(0); // os assigned port
     my_addr.sin_addr = ip_addr;
 
-    dest_addr.sin_family = AF_INET;
-    dest_addr.sin_port = htons(port);
-    dest_addr.sin_addr = ip_addr;
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = htons(port);
+    server_addr.sin_addr = ip_addr;
 
     rc = bind(so, (struct sockaddr *)&my_addr, sizeof(struct sockaddr_in));
     check_error(rc, "bind");
 
-    register_with_server(nick, so, dest_addr);
+    register_with_server(nick, so, server_addr);
 
     FD_ZERO(&set);
-    printf("Welcome to msn. Write quit to leave\n\n");
+    printf("Welcome to msn. Write QUIT to leave\n\n");
 
     memset(buf, 0, BUFSIZE);
-    while (strcmp(buf, "q"))
+    int main_event_loop = 1;
+    while (main_event_loop)
     {
         FD_SET(STDIN_FILENO, &set);
         FD_SET(so, &set);
@@ -89,18 +197,11 @@ int main(int argc, char const *argv[])
 
         if (FD_ISSET(STDIN_FILENO, &set))
         {
-            fgets(buf, BUFSIZE, stdin);
-            buf[strcspn(buf, "\n")] = 0; // if /n overwrite with 0
-            rc = sendto(so, buf, strlen(buf), 0, (struct sockaddr *)&dest_addr, sizeof(struct sockaddr_in));
-            check_error(rc, "sendto");
+            main_event_loop = handle_stdin(so);
         }
         else if (FD_ISSET(so, &set))
         {
-            // handle_socket();
-            rc = read(so, buf, BUFSIZE - 1);
-            check_error(rc, "read");
-            buf[rc] = '\0';
-            printf("Server: %s\n", buf);
+            handle_socket(so);
         }
     }
 
