@@ -100,12 +100,16 @@ char *handle_response(char *buf, struct sockaddr_in client_addr)
     char *operation = strtok(NULL, " ");
     char *nick = strtok(NULL, " ");
 
-    response = malloc(190);
+    response = malloc(BUFSIZE);
     check_malloc_error(response);
 
-    if (pkt == NULL || number == NULL || operation == NULL || nick == NULL)
+    if (pkt == NULL)
     {
         sprintf(response, "WRONG FORMAT");
+    }
+    else if (!strcmp(pkt, "ACK"))
+    {
+        response[0] = 0;
     }
     else if (!strcmp(operation, "REG"))
     {
@@ -178,10 +182,12 @@ int main(int argc, char const *argv[])
                 break;
             }
             response = handle_response(buf, client_addr);
-            printf("Sending response: %s\n\n", response);
 
-            wc = sendto(so, response, strlen(response), 0, (struct sockaddr *)&client_addr, sizeof(struct sockaddr_in));
-            check_error(wc, "sendto");
+            if (response[0])
+            {
+                send_message(so, client_addr, response);
+                printf("\n");
+            }
 
             free(response);
         }

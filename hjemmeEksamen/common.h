@@ -45,4 +45,6 @@ void setup_loss_probability(const char *arg);
 
 void send_message(int so, struct sockaddr_in dest_addr, char *msg);
 
+void send_ok(int so, struct sockaddr_in dest_addr, char *number);
+
 #endif

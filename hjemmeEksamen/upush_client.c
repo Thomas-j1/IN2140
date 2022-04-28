@@ -2,10 +2,19 @@
 
 #define MAXMSGSIZE 1400
 
+typedef struct client
+{
+    struct client *next;
+    struct sockaddr_in dest_addr;
+    int lastnumber;
+    char nick[];
+} client;
+
+client *root;
 int packetNumber = 0;
-struct sockaddr_in current_dest_addr, server_addr;
+struct sockaddr_in server_addr;
 char const *my_nick;
-char currText[MAXMSGSIZE];
+char my_msg[MAXMSGSIZE];
 
 void register_with_server(const char *nick, int so, struct sockaddr_in dest_addr)
 {
@@ -16,7 +25,62 @@ void register_with_server(const char *nick, int so, struct sockaddr_in dest_addr
     send_message(so, dest_addr, buf);
 }
 
-struct sockaddr_in create_sock_addr(char *ip, char *port)
+void free_clients()
+{
+    client *tmp, *tmp2;
+    tmp = root;
+    while (tmp)
+    {
+        tmp2 = tmp;
+        tmp = tmp->next;
+        free(tmp2);
+    }
+}
+
+client *find_client(char *nick)
+{
+    client *tmp = root;
+
+    while (tmp)
+    {
+        if (!strcmp(tmp->nick, nick))
+        {
+            return tmp;
+        }
+        tmp = tmp->next;
+    }
+
+    return NULL;
+}
+
+void add_to_clients(struct sockaddr_in dest_addr, char *nick)
+{
+    client *tmp = root;
+
+    while (tmp->next)
+    {
+        tmp = tmp->next;
+    }
+    // tmp is last in clients
+
+    client *new = malloc(sizeof(client) + strlen(nick) + 1);
+    check_malloc_error(new);
+    new->dest_addr = dest_addr;
+    strcpy(new->nick, nick);
+    new->next = NULL;
+
+    tmp->next = new;
+}
+
+void send_client_message(int so, struct sockaddr_in dest_addr, char packetNumber, char *nick, char *msg)
+{
+    char sbuf[MAXBUFSIZE];
+
+    sprintf(sbuf, "PKT %d FROM %s TO %s MSG %s", packetNumber, my_nick, nick, msg);
+    send_message(so, dest_addr, sbuf);
+}
+
+struct sockaddr_in create_sockaddr(char *ip, char *port)
 {
     struct sockaddr_in addr;
     struct in_addr ip_addr;
@@ -40,7 +104,7 @@ struct sockaddr_in create_sock_addr(char *ip, char *port)
 void handle_socket(int so)
 {
     int rc;
-    char rbuf[MAXBUFSIZE], sbuf[MAXBUFSIZE], ackBuf[BUFSIZE];
+    char rbuf[MAXBUFSIZE];
     struct sockaddr_in dest_addr;
     socklen_t socklen = sizeof(struct sockaddr_in);
 
@@ -68,18 +132,22 @@ void handle_socket(int so)
         }
         else if (!strcmp(action, "NOT")) // did not find client
         {
+            send_ok(so, dest_addr, number);
         }
         else if (!strcmp(action, "NICK")) // found nickname
         {
+            send_ok(so, dest_addr, number);
+
             char *nick = strtok(NULL, " ");
             strtok(NULL, " "); // IP
             char *ip = strtok(NULL, " ");
             strtok(NULL, " "); // PORT
             char *port = strtok(NULL, " ");
 
-            current_dest_addr = create_sock_addr(ip, port);
-            sprintf(sbuf, "PKT %d FROM %s TO %s MSG %s", packetNumber, my_nick, nick, currText);
-            send_message(so, current_dest_addr, sbuf);
+            struct sockaddr_in current_dest_addr = create_sockaddr(ip, port);
+            add_to_clients(current_dest_addr, nick);
+
+            send_client_message(so, current_dest_addr, packetNumber, nick, my_msg);
         }
     }
     else if (!strcmp(type, "PKT"))
@@ -101,8 +169,8 @@ void handle_socket(int so)
         }
         msg[strlen(msg) - 1] = 0; // remove trailing whitespace
 
-        sprintf(ackBuf, "ACK %s OK", number);
-        send_message(so, dest_addr, ackBuf);
+        send_ok(so, dest_addr, number);
+        add_to_clients(dest_addr, fNick);
 
         printf("%s: %s\n", fNick, msg);
     }
@@ -127,14 +195,30 @@ int handle_stdin(int so)
         strcpy(mBuf, buf);
 
         char *nick = strtok(mBuf + 1, " ");
-        strcpy(currText, buf + strlen(mBuf) + 1); // copy rest of message
+        strcpy(my_msg, buf + strlen(mBuf) + 1); // copy rest of message
 
-        sprintf(lookBuf, "PKT %d LOOKUP %s", packetNumber++, nick);
+        client *found = find_client(nick);
 
-        send_message(so, server_addr, lookBuf);
+        if (found)
+        {
+            send_client_message(so, found->dest_addr, packetNumber, nick, my_msg);
+        }
+        else
+        {
+            sprintf(lookBuf, "PKT %d LOOKUP %s", packetNumber++, nick);
+            send_message(so, server_addr, lookBuf);
+        }
 
         return 1;
     }
+}
+
+void init_root()
+{
+    root = malloc(sizeof(client));
+    check_malloc_error(root);
+    root->next = NULL;
+    root->nick[0] = 0;
 }
 
 int main(int argc, char const *argv[])
@@ -144,6 +228,8 @@ int main(int argc, char const *argv[])
     char const *nick, *port, *server_ip, *timeout;
     fd_set my_set;
     struct sockaddr_in my_addr;
+
+    init_root();
 
     if (argc < 6)
     {
@@ -165,7 +251,7 @@ int main(int argc, char const *argv[])
     my_addr.sin_port = htons(0);
     my_addr.sin_addr.s_addr = INADDR_ANY;
 
-    server_addr = create_sock_addr((char *)server_ip, (char *)port);
+    server_addr = create_sockaddr((char *)server_ip, (char *)port);
 
     rc = bind(so, (struct sockaddr *)&my_addr, sizeof(struct sockaddr_in));
     check_error(rc, "bind");
@@ -195,6 +281,7 @@ int main(int argc, char const *argv[])
     }
 
     close(so);
+    free_clients();
 
     return EXIT_SUCCESS;
 }

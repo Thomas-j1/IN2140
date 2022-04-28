@@ -48,3 +48,12 @@ void send_message(int so, struct sockaddr_in dest_addr, char *msg)
 
     printf("Sent message: %s\n", msg);
 }
+
+void send_ok(int so, struct sockaddr_in dest_addr, char *number)
+{
+    char ackBuf[BUFSIZE];
+
+    sprintf(ackBuf, "ACK %s OK", number);
+    send_message(so, dest_addr, ackBuf);
+    printf("\n");
+}
