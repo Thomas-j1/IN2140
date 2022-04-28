@@ -131,7 +131,7 @@ int main(int argc, char const *argv[])
     char buf[BUFSIZE], *response;
     // struct in_addr ipadress;
     struct sockaddr_in my_addr, client_addr;
-    fd_set mySet;
+    fd_set my_set;
     // struct timeval tv;
     socklen_t socklen = sizeof(struct sockaddr_in);
 
@@ -154,17 +154,18 @@ int main(int argc, char const *argv[])
     rc = bind(so, (struct sockaddr *)&my_addr, sizeof(struct sockaddr_in));
     check_error(rc, "bind");
 
-    FD_ZERO(&mySet);
+    FD_ZERO(&my_set);
 
     memset(buf, 0, BUFSIZE);
-    while (strcmp(buf, "q"))
+    while (strcmp(buf, "QUIT"))
     {
-        FD_SET(so, &mySet);
+        FD_SET(so, &my_set);
+        FD_SET(STDIN_FILENO, &my_set);
+        rc = select(FD_SETSIZE + 1, &my_set, NULL, NULL, NULL); //&tv);
+        check_error(rc, "select");
 
-        if (FD_ISSET(so, &mySet))
+        if (FD_ISSET(so, &my_set))
         {
-            rc = select(FD_SETSIZE + 1, &mySet, NULL, NULL, NULL); //&tv);
-            check_error(rc, "select");
 
             rc = recvfrom(so, buf, BUFSIZE - 1, 0, (struct sockaddr *)&client_addr, &socklen);
             check_error(rc, "recvfrom");
@@ -183,6 +184,11 @@ int main(int argc, char const *argv[])
             check_error(wc, "sendto");
 
             free(response);
+        }
+        if (FD_ISSET(STDIN_FILENO, &my_set))
+        {
+            fgets(buf, BUFSIZE, stdin);
+            buf[strcspn(buf, "\n")] = 0; // if /n overwrite with 0
         }
     }
 

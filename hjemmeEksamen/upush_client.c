@@ -16,7 +16,7 @@ void register_with_server(const char *nick, int so, struct sockaddr_in dest_addr
     send_message(so, dest_addr, buf);
 }
 
-void create_sock_addr(char *ip, char *port)
+struct sockaddr_in create_sock_addr(char *ip, char *port)
 {
     struct sockaddr_in addr;
     struct in_addr ip_addr;
@@ -34,7 +34,7 @@ void create_sock_addr(char *ip, char *port)
     addr.sin_port = htons(atoi(port));
     addr.sin_addr = ip_addr;
 
-    current_dest_addr = addr;
+    return addr;
 }
 
 void handle_socket(int so)
@@ -77,7 +77,7 @@ void handle_socket(int so)
             strtok(NULL, " "); // PORT
             char *port = strtok(NULL, " ");
 
-            create_sock_addr(ip, port);
+            current_dest_addr = create_sock_addr(ip, port);
             sprintf(sbuf, "PKT %d FROM %s TO %s MSG %s", packetNumber, my_nick, nick, currText);
             send_message(so, current_dest_addr, sbuf);
         }
@@ -88,7 +88,8 @@ void handle_socket(int so)
         strtok(NULL, " "); // FROM
         char *fNick = strtok(NULL, " ");
         strtok(NULL, " "); // TO
-        char *mNick = strtok(NULL, " ");
+        // char *mNick = strtok(NULL, " ");
+        strtok(NULL, " "); // mNick
         strtok(NULL, " "); // MSG
         char msg[MAXMSGSIZE], *msgToken;
         msgToken = strtok(NULL, " ");
@@ -110,7 +111,7 @@ void handle_socket(int so)
 int handle_stdin(int so)
 {
     char buf[MAXBUFSIZE], lookBuf[BUFSIZE]; // + strlen(nick)
-    char c;
+    // char c;
     fgets(buf, MAXBUFSIZE, stdin);
     buf[strcspn(buf, "\n")] = 0; // if /n overwrite with 0
     // while ((c = getchar()) != '\n' && c != EOF)
@@ -139,11 +140,9 @@ int handle_stdin(int so)
 int main(int argc, char const *argv[])
 {
     int so, rc;
-    unsigned short port;
     char buf[BUFSIZE];
-    char const *nick, *server_ip, *timeout;
-    fd_set set;
-    struct in_addr ip_addr;
+    char const *nick, *port, *server_ip, *timeout;
+    fd_set my_set;
     struct sockaddr_in my_addr;
 
     if (argc < 6)
@@ -155,51 +154,41 @@ int main(int argc, char const *argv[])
     nick = argv[1];
     my_nick = nick;
     server_ip = argv[2];
-    port = atoi(argv[3]);
+    port = argv[3];
     timeout = argv[4];
     setup_loss_probability(argv[5]);
 
     so = socket(AF_INET, SOCK_DGRAM, 0);
     check_error(so, "socket");
 
-    rc = inet_pton(AF_INET, server_ip, &ip_addr);
-    check_error(rc, "inet_pton");
-    if (rc == 0)
-    {
-        fprintf(stderr, "IP address not valid\n");
-        return EXIT_FAILURE;
-    }
-
     my_addr.sin_family = AF_INET;
-    my_addr.sin_port = htons(0); // os assigned port
-    my_addr.sin_addr = ip_addr;
+    my_addr.sin_port = htons(0);
+    my_addr.sin_addr.s_addr = INADDR_ANY;
 
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(port);
-    server_addr.sin_addr = ip_addr;
+    server_addr = create_sock_addr((char *)server_ip, (char *)port);
 
     rc = bind(so, (struct sockaddr *)&my_addr, sizeof(struct sockaddr_in));
     check_error(rc, "bind");
 
     register_with_server(nick, so, server_addr);
 
-    FD_ZERO(&set);
+    FD_ZERO(&my_set);
     printf("Welcome to msn. Write QUIT to leave\n\n");
 
     memset(buf, 0, BUFSIZE);
     int main_event_loop = 1;
     while (main_event_loop)
     {
-        FD_SET(STDIN_FILENO, &set);
-        FD_SET(so, &set);
-        rc = select(FD_SETSIZE, &set, NULL, NULL, NULL);
+        FD_SET(STDIN_FILENO, &my_set);
+        FD_SET(so, &my_set);
+        rc = select(FD_SETSIZE, &my_set, NULL, NULL, NULL);
         check_error(rc, "select");
 
-        if (FD_ISSET(STDIN_FILENO, &set))
+        if (FD_ISSET(STDIN_FILENO, &my_set))
         {
             main_event_loop = handle_stdin(so);
         }
-        else if (FD_ISSET(so, &set))
+        else if (FD_ISSET(so, &my_set))
         {
             handle_socket(so);
         }
