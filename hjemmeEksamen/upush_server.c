@@ -8,6 +8,7 @@ typedef struct client
 {
     int port;
     char ip[INET_ADDRSTRLEN];
+    int last_number;
     char nick[160];
 } client;
 
@@ -65,6 +66,7 @@ char *register_client(char *nick, struct sockaddr_in client_addr)
 
     memcpy(&clients[currIndex].ip, inet_ntoa(client_addr.sin_addr), INET_ADDRSTRLEN);
     clients[currIndex].port = (int)ntohs(client_addr.sin_port);
+    clients[currIndex].last_number = 0;
 
     printf("Registered client %s:\n  ip: %s\n  port: %d\n",
            clients[currIndex].nick, clients[currIndex].ip, clients[currIndex].port);

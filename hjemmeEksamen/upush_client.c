@@ -6,22 +6,31 @@ typedef struct client
 {
     struct client *next;
     struct sockaddr_in dest_addr;
-    int lastnumber;
+    int last_number;
     char nick[];
 } client;
 
+typedef struct server
+{
+    struct sockaddr_in dest_addr;
+    int last_number;
+} server;
+
 client *root;
-int packetNumber = 0;
-struct sockaddr_in server_addr;
+int packet_number = 0;
+server my_server;
 char const *my_nick;
+char last_nick_search[MAXNICKSIZE];
 char my_msg[MAXMSGSIZE];
+char last_packet[MAXBUFSIZE];
+struct sockaddr_in last_addr;
+int waiting_for_response = 0;
 
 void register_with_server(const char *nick, int so, struct sockaddr_in dest_addr)
 {
     char buf[BUFSIZE];
 
-    sprintf(buf, "PKT %d REG %s", packetNumber++, nick);
-
+    sprintf(buf, "PKT %d REG %s", packet_number++, nick);
     send_message(so, dest_addr, buf);
 }
 
@@ -72,12 +81,21 @@ void add_to_clients(struct sockaddr_in dest_addr, char *nick)
     tmp->next = new;
 }
 
-void send_client_message(int so, struct sockaddr_in dest_addr, char packetNumber, char *nick, char *msg)
+void send_client_message(int so, struct sockaddr_in dest_addr, char packet_number, char *nick, char *msg)
 {
     char sbuf[MAXBUFSIZE];
 
-    sprintf(sbuf, "PKT %d FROM %s TO %s MSG %s", packetNumber, my_nick, nick, msg);
-    send_message(so, dest_addr, sbuf);
+    sprintf(sbuf, "PKT %d FROM %s TO %s MSG %s", packet_number, my_nick, nick, msg);
+    send_loss_message(so, dest_addr, sbuf);
+    strcpy(last_packet, sbuf);
+    last_addr = dest_addr;
+    waiting_for_response = 1;
+}
+
+void resend_last_packet(int so)
+{
+    waiting_for_response++;
+    send_message(so, last_addr, last_packet);
 }
 
 struct sockaddr_in create_sockaddr(char *ip, char *port)
@@ -125,6 +143,8 @@ void handle_socket(int so)
     else if (!strcmp(type, "ACK"))
     {
         // handle ack from number
+        waiting_for_response = 0;
+
         char *action = strtok(NULL, " ");
 
         if (!strcmp(action, "OK")) // handle number from who
@@ -133,24 +153,31 @@ void handle_socket(int so)
         else if (!strcmp(action, "NOT")) // did not find client
         {
             send_ok(so, dest_addr, number);
+            fprintf(stderr, "NICK %s NOT REGISTERED\n", last_nick_search);
         }
         else if (!strcmp(action, "NICK")) // found nickname
         {
             send_ok(so, dest_addr, number);
+            int n = atoi(number);
 
-            char *nick = strtok(NULL, " ");
-            strtok(NULL, " "); // IP
-            char *ip = strtok(NULL, " ");
-            strtok(NULL, " "); // PORT
-            char *port = strtok(NULL, " ");
+            if (my_server.last_number != n) // not duplicate message
+            {
+                my_server.last_number = atoi(number);
 
-            struct sockaddr_in current_dest_addr = create_sockaddr(ip, port);
-            add_to_clients(current_dest_addr, nick);
+                char *nick = strtok(NULL, " ");
+                strtok(NULL, " "); // IP
+                char *ip = strtok(NULL, " ");
+                strtok(NULL, " "); // PORT
+                char *port = strtok(NULL, " ");
 
-            send_client_message(so, current_dest_addr, packetNumber, nick, my_msg);
+                struct sockaddr_in current_dest_addr = create_sockaddr(ip, port);
+                add_to_clients(current_dest_addr, nick);
+
+                send_client_message(so, current_dest_addr, packet_number, nick, my_msg);
+            }
         }
     }
-    else if (!strcmp(type, "PKT"))
+    else if (!strcmp(type, "PKT")) // pkt with message from other client
     {
         // handle PKT
         strtok(NULL, " "); // FROM
@@ -170,9 +197,21 @@ void handle_socket(int so)
         msg[strlen(msg) - 1] = 0; // remove trailing whitespace
 
         send_ok(so, dest_addr, number);
-        add_to_clients(dest_addr, fNick);
-
-        printf("%s: %s\n", fNick, msg);
+        client *found = find_client(fNick);
+        if (!found) // client unknown
+        {
+            add_to_clients(dest_addr, fNick);
+        }
+        else
+        {
+            // duplicate message?
+            int n = atoi(number);
+            if (found->last_number != n)
+            {
+                printf("%s: %s\n", fNick, msg);
+                found->last_number = n;
+            }
+        }
     }
 }
 
@@ -201,12 +240,13 @@ int handle_stdin(int so)
 
         if (found)
         {
-            send_client_message(so, found->dest_addr, packetNumber, nick, my_msg);
+            send_client_message(so, found->dest_addr, packet_number, nick, my_msg);
         }
         else
         {
-            sprintf(lookBuf, "PKT %d LOOKUP %s", packetNumber++, nick);
-            send_message(so, server_addr, lookBuf);
+            strcpy(last_nick_search, nick);
+            sprintf(lookBuf, "PKT %d LOOKUP %s", packet_number++, nick);
+            send_message(so, my_server.dest_addr, lookBuf);
         }
 
         return 1;
@@ -225,9 +265,11 @@ int main(int argc, char const *argv[])
 {
     int so, rc;
     char buf[BUFSIZE];
-    char const *nick, *port, *server_ip, *timeout;
+    int timeout;
+    char const *nick, *port, *server_ip;
     fd_set my_set;
     struct sockaddr_in my_addr;
+    struct timeval tv;
 
     init_root();
 
@@ -241,7 +283,7 @@ int main(int argc, char const *argv[])
     my_nick = nick;
     server_ip = argv[2];
     port = argv[3];
-    timeout = argv[4];
+    timeout = atoi(argv[4]);
     setup_loss_probability(argv[5]);
 
     so = socket(AF_INET, SOCK_DGRAM, 0);
@@ -251,12 +293,13 @@ int main(int argc, char const *argv[])
     my_addr.sin_port = htons(0);
     my_addr.sin_addr.s_addr = INADDR_ANY;
 
-    server_addr = create_sockaddr((char *)server_ip, (char *)port);
+    my_server.dest_addr = create_sockaddr((char *)server_ip, (char *)port);
+    my_server.last_number = -1;
 
     rc = bind(so, (struct sockaddr *)&my_addr, sizeof(struct sockaddr_in));
     check_error(rc, "bind");
 
-    register_with_server(nick, so, server_addr);
+    register_with_server(nick, so, my_server.dest_addr);
 
     FD_ZERO(&my_set);
     printf("Welcome to msn. Write QUIT to leave\n\n");
@@ -265,12 +308,20 @@ int main(int argc, char const *argv[])
     int main_event_loop = 1;
     while (main_event_loop)
     {
+        tv.tv_sec = timeout;
+        tv.tv_usec = 0;
         FD_SET(STDIN_FILENO, &my_set);
         FD_SET(so, &my_set);
-        rc = select(FD_SETSIZE, &my_set, NULL, NULL, NULL);
+        rc = select(FD_SETSIZE, &my_set, NULL, NULL, &tv);
         check_error(rc, "select");
-
-        if (FD_ISSET(STDIN_FILENO, &my_set))
+        if (rc == 0)
+        {
+            if (waiting_for_response)
+            {
+                resend_last_packet(so);
+            }
+        }
+        else if (FD_ISSET(STDIN_FILENO, &my_set))
         {
             main_event_loop = handle_stdin(so);
         }
