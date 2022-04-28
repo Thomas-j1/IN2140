@@ -50,8 +50,4 @@ void send_loss_message(int so, struct sockaddr_in dest_addr, char *msg);
 
 void send_ok(int so, struct sockaddr_in dest_addr, char *number);
 
-int listen_for_ack(int so, int number, struct sockaddr_in last_addr);
-
-int send_message_wait(int so, struct sockaddr_in dest_addr, char *msg, int number);
-
 #endif

@@ -13,25 +13,27 @@
 
 static float loss_probability = 0.0f;
 
-void set_loss_probability( float x )
+void set_loss_probability(float x)
 {
     loss_probability = x;
+    srand48(2141513);
 }
 
-ssize_t send_packet( int sock, void* buffer, size_t size, int flags, struct sockaddr* addr, socklen_t addrlen )
+ssize_t send_packet(int sock, void *buffer, size_t size, int flags, struct sockaddr *addr, socklen_t addrlen)
 {
     float rnd = drand48();
+    printf("rnd: %f\n", rnd);
 
-    if( rnd < loss_probability)
+    if (rnd < loss_probability)
     {
         fprintf(stderr, "Randomly dropping a packet\n");
         return size;
     }
 
-    return sendto( sock,
-                   buffer,
-                   size,
-                   flags,
-                   addr,
-                   addrlen );
+    return sendto(sock,
+                  buffer,
+                  size,
+                  flags,
+                  addr,
+                  addrlen);
 }
