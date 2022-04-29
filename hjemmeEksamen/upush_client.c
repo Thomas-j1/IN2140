@@ -13,7 +13,7 @@ typedef struct client
 client *root;
 int packet_number = 0;
 char const *my_nick;
-char last_nick_dest[MAXNICKSIZE];
+char current_nick[MAXNICKSIZE];
 char client_packet[MAXBUFSIZE];
 char server_packet[BUFSIZE];
 struct sockaddr_in last_client_addr, server_addr;
@@ -148,22 +148,22 @@ void update_server_packet(char *nick)
 
 int resend_last_packet(int so)
 {
-    if (awaiting_client) // last msg sent to server
+    if (awaiting_client) // waiting for client state
     {
         if (retransmit_tries == 1) // lookup client again
         {
-            update_server_packet(last_nick_dest);
+            update_server_packet(current_nick);
             send_server_message(so);
         }
         else if (retransmit_tries > 1 && awating_server) // no response on lookup
         {
-            fprintf(stderr, "NICK %s UNREACHABLE\n", last_nick_dest);
+            fprintf(stderr, "NICK %s UNREACHABLE\n", current_nick);
             reset_states();
             return 1;
         }
-        else if (retransmit_tries > 3 && awating_server) // lost packets after successful lookup
+        else if (retransmit_tries > 2) // lost packets after successful lookup
         {
-            fprintf(stderr, "NICK %s UNREACHABLE\n", last_nick_dest);
+            fprintf(stderr, "NICK %s UNREACHABLE\n", current_nick);
             reset_states();
             return 1;
         }
@@ -264,7 +264,7 @@ void handle_ack(int so, char *type)
     else if (!strcmp(action, "NOT")) // did not find client
     {
         // send_ok(so, dest_addr, number);
-        fprintf(stderr, "NICK %s NOT REGISTERED\n", last_nick_dest);
+        fprintf(stderr, "NICK %s NOT REGISTERED\n", current_nick);
         reset_states();
     }
     else if (!strcmp(action, "NICK")) // found nickname
@@ -349,11 +349,12 @@ int handle_stdin(int so)
     else // look for nick and send message
     {
         char buf_copy[strlen(buf) + 1];
-        strcpy(buf_copy, buf);
-        char *nick = strtok(buf_copy + 1, " ");
-        strcpy(last_nick_dest, nick); // last nick sent
-
         char msg[MAXMSGSIZE];
+        char *nick;
+
+        strcpy(buf_copy, buf);
+        nick = strtok(buf_copy + 1, " ");
+        strcpy(current_nick, nick);              // update current_nick
         strcpy(msg, buf + strlen(buf_copy) + 1); // copy rest of message
 
         client *found = find_client(nick);
@@ -414,7 +415,7 @@ int main(int argc, char const *argv[])
     register_with_server(nick, so, server_addr);
 
     FD_ZERO(&my_set);
-    printf("Welcome to msn. Write QUIT to leave\n\n");
+    printf("Messaging service usgage:<@user> <msg>\n\n");
 
     memset(buf, 0, BUFSIZE);
     int main_event_loop = 1;
@@ -422,9 +423,13 @@ int main(int argc, char const *argv[])
     {
         tv.tv_sec = timeout;
         tv.tv_usec = 0;
-        if (!await_ack)
+        if (!await_ack) // block reading from stdin
         {
             FD_SET(STDIN_FILENO, &my_set);
+        }
+        else
+        {
+            FD_CLR(STDIN_FILENO, &my_set);
         }
         FD_SET(so, &my_set);
         rc = select(FD_SETSIZE, &my_set, NULL, NULL, &tv);
@@ -440,7 +445,7 @@ int main(int argc, char const *argv[])
                 main_event_loop = resend_last_packet(so);
             }
         }
-        else if (FD_ISSET(STDIN_FILENO, &my_set))
+        else if (FD_ISSET(STDIN_FILENO, &my_set) && !await_ack)
         {
             main_event_loop = handle_stdin(so);
         }

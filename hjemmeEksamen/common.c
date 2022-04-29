@@ -69,6 +69,6 @@ void send_ok(int so, struct sockaddr_in dest_addr, char *number)
     char ackBuf[BUFSIZE];
 
     sprintf(ackBuf, "ACK %s OK", number);
-    send_message(so, dest_addr, ackBuf);
+    send_loss_message(so, dest_addr, ackBuf);
     printf("\n");
 }
