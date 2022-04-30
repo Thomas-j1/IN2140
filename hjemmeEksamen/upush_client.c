@@ -111,7 +111,7 @@ void add_to_clients(struct sockaddr_in dest_addr, char *nick)
     tmp->next = new;
 }
 
-// sending
+// sending methods
 void register_with_server(const char *nick, int so, struct sockaddr_in dest_addr)
 {
     char buf[BUFSIZE];
@@ -185,14 +185,14 @@ int resend_last_packet(int so)
     return 1;
 }
 
-// handling
+// handling methods
 void handle_pkt(int so, struct sockaddr_in dest_addr, char *type, char *number)
 {
     if (strcmp(type, "PKT")) // pkt with message from other client
     {
         return;
     }
-    char ackBuf[BUFSIZE];
+    char ack_buf[BUFSIZE];
 
     // handle PKT
     strtok(NULL, " "); // FROM
@@ -212,15 +212,15 @@ void handle_pkt(int so, struct sockaddr_in dest_addr, char *type, char *number)
 
     if (!fNick || !mNick || strlen(msg) < 1) // wrong format
     {
-        sprintf(ackBuf, "ACK %s WRONG FORMAT", number);
-        send_loss_message(so, dest_addr, ackBuf);
+        sprintf(ack_buf, "ACK %s WRONG FORMAT", number);
+        send_loss_message(so, dest_addr, ack_buf);
         fprintf(stderr, "Missing PKT data\n");
         return;
     }
     else if (strcmp(mNick, my_nick)) // wrong name
     {
-        sprintf(ackBuf, "ACK %s WRONG NAME", number);
-        send_loss_message(so, dest_addr, ackBuf);
+        sprintf(ack_buf, "ACK %s WRONG NAME", number);
+        send_loss_message(so, dest_addr, ack_buf);
         return;
     }
 
@@ -375,6 +375,7 @@ int handle_stdin(int so)
     }
 }
 
+// main method
 int main(int argc, char const *argv[])
 {
     int so, rc;
@@ -423,7 +424,7 @@ int main(int argc, char const *argv[])
     {
         tv.tv_sec = timeout;
         tv.tv_usec = 0;
-        if (!await_ack) // block reading from stdin
+        if (!awaiting_client) // block reading from stdin
         {
             FD_SET(STDIN_FILENO, &my_set);
         }
@@ -445,7 +446,7 @@ int main(int argc, char const *argv[])
                 main_event_loop = resend_last_packet(so);
             }
         }
-        else if (FD_ISSET(STDIN_FILENO, &my_set) && !await_ack)
+        else if (FD_ISSET(STDIN_FILENO, &my_set) && !awaiting_client)
         {
             main_event_loop = handle_stdin(so);
         }
