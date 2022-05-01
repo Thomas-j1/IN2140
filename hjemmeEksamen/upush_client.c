@@ -1,6 +1,7 @@
 #include "common.h"
 
 #define MAXMSGSIZE 1400
+#define HEARTBEAT 10
 
 typedef struct client
 {
@@ -20,8 +21,8 @@ struct sockaddr_in last_client_addr, server_addr;
 
 // states
 int await_ack = 0;
-int awaiting_client = 0;
-int awating_server = 0;
+int await_client = 0;
+int await_server = 0;
 int retransmit_tries = 0;
 
 // local methods
@@ -29,8 +30,8 @@ int retransmit_tries = 0;
 void reset_states()
 {
     await_ack = 0;
-    awaiting_client = 0;
-    awating_server = 0;
+    await_client = 0;
+    await_server = 0;
     retransmit_tries = 0;
 }
 
@@ -123,7 +124,7 @@ void register_with_server(const char *nick, int so, struct sockaddr_in dest_addr
 
 void send_client_message(int so, struct sockaddr_in dest_addr)
 {
-    awaiting_client = 1;
+    await_client = 1;
     await_ack = 1; // wait response
     send_loss_message(so, dest_addr, client_packet);
     last_client_addr = dest_addr;
@@ -136,7 +137,7 @@ void update_client_packet(char number, char *nick, char *msg)
 
 void send_server_message(int so)
 {
-    awating_server = 1;
+    await_server = 1;
     await_ack = 1; // wait response
     send_loss_message(so, server_addr, server_packet);
 }
@@ -146,16 +147,22 @@ void update_server_packet(char *nick)
     sprintf(server_packet, "PKT %d LOOKUP %s", packet_number++, nick);
 }
 
+void send_heartbeat(int so)
+{
+    sprintf(server_packet, "PKT %d BEAT %s", packet_number++, my_nick);
+    send_server_message(so);
+}
+
 int resend_last_packet(int so)
 {
-    if (awaiting_client) // waiting for client state
+    if (await_client) // waiting for client state
     {
         if (retransmit_tries == 1) // lookup client again
         {
             update_server_packet(current_nick);
             send_server_message(so);
         }
-        else if (retransmit_tries > 1 && awating_server) // no response on lookup
+        else if (retransmit_tries > 1 && await_server) // no response on lookup
         {
             fprintf(stderr, "NICK %s UNREACHABLE\n", current_nick);
             reset_states();
@@ -280,8 +287,8 @@ void handle_ack(int so, char *type)
             fprintf(stderr, "Missing NICK data\n");
             return;
         }
-        awating_server = 0;
-        if (!awaiting_client)
+        await_server = 0;
+        if (!await_client)
         {
             reset_states();
         }
@@ -313,7 +320,8 @@ void handle_socket(int so)
 
     rbuf[rc] = '\0';
     rbuf[strcspn(rbuf, "\n")] = 0;
-    printf("Received %d bytes: %s\n", rc, rbuf);
+    if (DEBUG)
+        printf("Received %d bytes: %s\n\n", rc, rbuf);
 
     char *type = strtok(rbuf, " ");
     char *number = strtok(NULL, " ");
@@ -378,13 +386,14 @@ int handle_stdin(int so)
 // main method
 int main(int argc, char const *argv[])
 {
-    int so, rc;
+    int so, rc, main_event_loop;
     char buf[BUFSIZE];
     int timeout;
     char const *nick, *port, *server_ip;
     fd_set my_set;
     struct sockaddr_in my_addr;
     struct timeval tv;
+    time_t last_beat, curr_time;
 
     init_root();
 
@@ -416,15 +425,16 @@ int main(int argc, char const *argv[])
     register_with_server(nick, so, server_addr);
 
     FD_ZERO(&my_set);
-    printf("Messaging service usgage:<@user> <msg>\n\n");
+    printf("Messaging service usage:<@user> <msg>\n\n");
 
+    last_beat = time(NULL);
     memset(buf, 0, BUFSIZE);
-    int main_event_loop = 1;
+    main_event_loop = 1;
     while (main_event_loop)
     {
         tv.tv_sec = timeout;
         tv.tv_usec = 0;
-        if (!awaiting_client) // block reading from stdin
+        if (!await_ack && !await_client) // block reading from stdin
         {
             FD_SET(STDIN_FILENO, &my_set);
         }
@@ -439,6 +449,7 @@ int main(int argc, char const *argv[])
         {
             if (await_ack < 0) // could not register with server
             {
+                fprintf(stderr, "Could not register with server\nABORTING...\n");
                 main_event_loop = 0;
             }
             else if (await_ack) // resend
@@ -446,13 +457,19 @@ int main(int argc, char const *argv[])
                 main_event_loop = resend_last_packet(so);
             }
         }
-        else if (FD_ISSET(STDIN_FILENO, &my_set) && !awaiting_client)
+        else if (FD_ISSET(STDIN_FILENO, &my_set) && !await_ack && !await_client)
         {
             main_event_loop = handle_stdin(so);
         }
         else if (FD_ISSET(so, &my_set))
         {
             handle_socket(so);
+        }
+        curr_time = time(NULL);
+        if (curr_time - last_beat > HEARTBEAT)
+        {
+            send_heartbeat(so);
+            last_beat = time(NULL);
         }
     }
 

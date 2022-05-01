@@ -7,10 +7,12 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <sys/select.h>
+#include <time.h>
 
 #define BUFSIZE 250
 #define MAXBUFSIZE 1600
 #define MAXNICKSIZE 20
+#define DEBUG 1
 
 /**
  * @brief checks return value for error

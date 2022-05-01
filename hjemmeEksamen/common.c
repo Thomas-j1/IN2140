@@ -33,7 +33,8 @@ void setup_loss_probability(const char *arg)
     loss_probability = atoi(arg);
     floss_probability = convert_loss_probability(loss_probability);
     set_loss_probability(floss_probability);
-    printf("setup lpb: %f\n", floss_probability);
+    if (DEBUG)
+        printf("setup lpb: %f\n\n", floss_probability);
 }
 
 void send_message(int so, struct sockaddr_in dest_addr, char *msg)
@@ -47,14 +48,16 @@ void send_message(int so, struct sockaddr_in dest_addr, char *msg)
                 (struct sockaddr *)&dest_addr,
                 sizeof(struct sockaddr_in));
     check_error(rc, "sendto");
-    printf("Sent message: %s\n", msg);
+    if (DEBUG)
+        printf("Sent message: %s\n", msg);
 }
 
 void send_loss_message(int so, struct sockaddr_in dest_addr, char *msg)
 {
     int rc;
 
-    printf("trying to send message: %s\n", msg);
+    if (DEBUG)
+        printf("Attempting to send message: %s\n", msg);
     rc = send_packet(so,
                      msg,
                      strlen(msg),
@@ -70,5 +73,4 @@ void send_ok(int so, struct sockaddr_in dest_addr, char *number)
 
     sprintf(ackBuf, "ACK %s OK", number);
     send_loss_message(so, dest_addr, ackBuf);
-    printf("\n");
 }

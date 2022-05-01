@@ -1,5 +1,7 @@
 #include "common.h"
 
+#define STALE 30
+
 /**
  * @brief data struct for clients
  *
@@ -9,11 +11,12 @@ typedef struct client
     int port;
     char ip[INET_ADDRSTRLEN];
     int last_number;
+    time_t time_last;
     char nick[160];
 } client;
 
 client *clients;
-int numberOfClients = 0;
+int client_count = 0;
 
 /**
  * @brief checks clients for nick
@@ -23,7 +26,7 @@ int numberOfClients = 0;
  */
 int nick_exists(char *nick)
 {
-    for (int i = 0; i < numberOfClients; i++)
+    for (int i = 0; i < client_count; i++)
     {
         if (!strcmp(clients[i].nick, nick))
         {
@@ -36,7 +39,8 @@ int nick_exists(char *nick)
 void lookup_nick(char *nick, char *response, char *number)
 {
     int exists = nick_exists(nick);
-    if (exists < 0)
+    time_t curr_time = time(NULL);
+    if (exists < 0 || curr_time - clients[exists].time_last > STALE)
     {
         sprintf(response, "ACK %s NOT FOUND", number);
     }
@@ -47,29 +51,40 @@ void lookup_nick(char *nick, char *response, char *number)
     }
 }
 
+char *update_client_time(char *nick)
+{
+    int exists = nick_exists(nick);
+    if (exists > -1)
+    {
+        clients[exists].time_last = time(NULL);
+    }
+    return "OK"; // could return error if not exists if in scope of task
+}
+
 char *register_client(char *nick, struct sockaddr_in client_addr)
 {
-    int currIndex;
+    int i;
     char *response;
     int exists = nick_exists(nick);
     if (exists < 0)
     {
-        clients = (client *)realloc(clients, sizeof(client) * (++numberOfClients));
+        clients = (client *)realloc(clients, sizeof(client) * (++client_count));
         check_malloc_error(clients);
-        currIndex = numberOfClients - 1;
-        strcpy(clients[currIndex].nick, nick);
+        i = client_count - 1;
+        strcpy(clients[i].nick, nick);
     }
     else // overwrite nick
     {
-        currIndex = exists;
+        i = exists;
     }
 
-    memcpy(&clients[currIndex].ip, inet_ntoa(client_addr.sin_addr), INET_ADDRSTRLEN);
-    clients[currIndex].port = (int)ntohs(client_addr.sin_port);
-    clients[currIndex].last_number = 0;
+    memcpy(&clients[i].ip, inet_ntoa(client_addr.sin_addr), INET_ADDRSTRLEN);
+    clients[i].port = (int)ntohs(client_addr.sin_port);
+    clients[i].last_number = 0;
+    clients[i].time_last = time(NULL);
 
-    printf("Registered client %s:\n  ip: %s\n  port: %d\n",
-           clients[currIndex].nick, clients[currIndex].ip, clients[currIndex].port);
+    printf("Registered client %s:\n  ip: %s\n  port: %d\n  time: %li\n",
+           clients[i].nick, clients[i].ip, clients[i].port, clients[i].time_last);
 
     response = "OK";
     return response;
@@ -78,10 +93,10 @@ char *register_client(char *nick, struct sockaddr_in client_addr)
 void print_clients()
 {
     printf("Clients: \n");
-    for (int i = 0; i < numberOfClients; i++)
+    for (int i = 0; i < client_count; i++)
     {
-        printf(" Client %s:\n  ip: %s\n  port: %d\n",
-               clients[i].nick, clients[i].ip, clients[i].port);
+        printf(" Client %s:\n  ip: %s\n  port: %d\n, time: %li",
+               clients[i].nick, clients[i].ip, clients[i].port, clients[i].time_last);
     }
 }
 
@@ -95,15 +110,16 @@ void print_clients()
  */
 char *handle_response(char *buf, struct sockaddr_in client_addr)
 {
-    char *response, mBuf[strlen(buf) + 1];
-    strcpy(mBuf, buf);
-    char *pkt = strtok(mBuf, " ");
+    char *response, buf_copy[strlen(buf) + 1];
+    strcpy(buf_copy, buf);
+    char *pkt = strtok(buf_copy, " ");
     char *number = strtok(NULL, " ");
     char *operation = strtok(NULL, " ");
     char *nick = strtok(NULL, " ");
 
     response = malloc(BUFSIZE);
     check_malloc_error(response);
+    memset(response, 0, BUFSIZE);
 
     if (pkt == NULL)
     {
@@ -120,6 +136,10 @@ char *handle_response(char *buf, struct sockaddr_in client_addr)
     else if (!strcmp(operation, "LOOKUP"))
     {
         lookup_nick(nick, response, number);
+    }
+    else if (!strcmp(operation, "BEAT"))
+    {
+        sprintf(response, "ACK %s %s", number, update_client_time(nick));
     }
     else
     {
@@ -178,17 +198,16 @@ int main(int argc, char const *argv[])
 
             buf[rc] = '\0';
             buf[strcspn(buf, "\n")] = 0; // if /n overwrite with 0
-            printf("Received %d bytes: %s\n", rc, buf);
-            if (!strcmp(buf, "q"))
-            {
-                break;
-            }
+            if (DEBUG)
+                printf("Received %d bytes: %s\n", rc, buf);
+
             response = handle_response(buf, client_addr);
 
-            if (response[0])
+            if (response[0]) // response contains at least 1 char
             {
                 send_message(so, client_addr, response);
-                printf("\n");
+                if (DEBUG)
+                    printf("\n");
             }
 
             free(response);
@@ -200,7 +219,8 @@ int main(int argc, char const *argv[])
         }
     }
 
-    print_clients(clients);
+    if (DEBUG)
+        print_clients(clients);
 
     close(so);
     free(clients);
