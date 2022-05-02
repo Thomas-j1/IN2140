@@ -12,7 +12,7 @@
 #define BUFSIZE 250
 #define MAXBUFSIZE 1600
 #define MAXNICKSIZE 20
-#define DEBUG 1
+#define DEBUG 0
 
 /**
  * @brief checks return value for error

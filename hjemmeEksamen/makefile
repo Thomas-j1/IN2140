@@ -25,7 +25,7 @@ upush_client.o: upush_client.c
 	gcc $(CFLAGS) -c upush_client.c
 
 runClient: upush_client
-	./upush_client runClient 127.0.0.1 4321 4 10
+	./upush_client runClient 127.0.0.1 4321 4 5
 
 valClient: upush_client
 	valgrind $(VFLAGS) ./upush_client valgrind 127.0.0.1 4321 1 30
@@ -42,7 +42,7 @@ runTest: tests
 valTest: tests
 	valgrind $(VFLAGS) ./tests 4322 20
 
-common.o: common.c
+common.o: common.c common.h
 	gcc $(CFLAGS) -c common.c
 
 clean:

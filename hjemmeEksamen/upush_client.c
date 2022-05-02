@@ -8,6 +8,7 @@ typedef struct client
     struct client *next;
     struct sockaddr_in dest_addr;
     int last_number;
+    int blocked;
     char nick[];
 } client;
 
@@ -70,9 +71,10 @@ void free_clients()
 
 void init_root()
 {
-    root = malloc(sizeof(client));
+    root = malloc(sizeof(client) + 1); // + 0 byte for name
     check_malloc_error(root);
     root->next = NULL;
+    root->blocked = 1;
     root->nick[0] = 0;
 }
 
@@ -92,7 +94,18 @@ client *find_client(char *nick)
     return NULL;
 }
 
-void add_to_clients(struct sockaddr_in dest_addr, char *nick)
+void set_client_block(char *nick, int value)
+{
+    client *found = find_client(nick);
+    if (found)
+    {
+        found->blocked = value;
+        if (DEBUG)
+            printf("set client %s blocked to %d\n", nick, value);
+    }
+}
+
+void add_to_clients(struct sockaddr_in dest_addr, char *nick, int number)
 {
     client *tmp = root;
 
@@ -106,7 +119,8 @@ void add_to_clients(struct sockaddr_in dest_addr, char *nick)
     check_malloc_error(new);
     new->dest_addr = dest_addr;
     strcpy(new->nick, nick);
-    new->last_number = -1;
+    new->last_number = number;
+    new->blocked = 0;
     new->next = NULL;
 
     tmp->next = new;
@@ -203,28 +217,28 @@ void handle_pkt(int so, struct sockaddr_in dest_addr, char *type, char *number)
 
     // handle PKT
     strtok(NULL, " "); // FROM
-    char *fNick = strtok(NULL, " ");
+    char *pkt_nick = strtok(NULL, " ");
     strtok(NULL, " "); // TO
-    char *mNick = strtok(NULL, " ");
+    char *dest_nick = strtok(NULL, " ");
     strtok(NULL, " "); // MSG
-    char msg[MAXMSGSIZE], *msgToken;
-    msgToken = strtok(NULL, " ");
+    char msg[MAXMSGSIZE], *msg_token;
+    msg_token = strtok(NULL, " ");
     memset(msg, 0, sizeof(msg));
-    while (msgToken != NULL)
+    while (msg_token != NULL)
     {
-        sprintf(msg + strlen(msg), "%s ", msgToken);
-        msgToken = strtok(NULL, " ");
+        sprintf(msg + strlen(msg), "%s ", msg_token);
+        msg_token = strtok(NULL, " ");
     }
     msg[strlen(msg) - 1] = 0; // remove trailing whitespace
 
-    if (!fNick || !mNick || strlen(msg) < 1) // wrong format
+    if (!pkt_nick || !dest_nick || strlen(msg) < 1) // wrong format
     {
         sprintf(ack_buf, "ACK %s WRONG FORMAT", number);
         send_loss_message(so, dest_addr, ack_buf);
         fprintf(stderr, "Missing PKT data\n");
         return;
     }
-    else if (strcmp(mNick, my_nick)) // wrong name
+    else if (strcmp(dest_nick, my_nick)) // wrong name
     {
         sprintf(ack_buf, "ACK %s WRONG NAME", number);
         send_loss_message(so, dest_addr, ack_buf);
@@ -232,18 +246,19 @@ void handle_pkt(int so, struct sockaddr_in dest_addr, char *type, char *number)
     }
 
     send_ok(so, dest_addr, number);
-    client *found = find_client(fNick);
+    client *found = find_client(pkt_nick);
     if (!found) // client unknown
     {
-        add_to_clients(dest_addr, fNick);
+        add_to_clients(dest_addr, pkt_nick, atoi(number));
+        printf("%s: %s\n", pkt_nick, msg);
     }
     else
     {
         // duplicate message?
         int n = atoi(number);
-        if (found->last_number != n)
+        if (found->last_number != n && !found->blocked)
         {
-            printf("%s: %s\n", fNick, msg);
+            printf("%s: %s\n", pkt_nick, msg);
             found->last_number = n;
         }
     }
@@ -298,7 +313,7 @@ void handle_ack(int so, char *type)
         client *found = find_client(nick);
         if (!found) // client unknown
         {
-            add_to_clients(current_dest_addr, nick);
+            add_to_clients(current_dest_addr, nick, -1);
         }
         else
         {
@@ -356,28 +371,62 @@ int handle_stdin(int so)
     }
     else // look for nick and send message
     {
-        char buf_copy[strlen(buf) + 1];
-        char msg[MAXMSGSIZE];
-        char *nick;
-
-        strcpy(buf_copy, buf);
-        nick = strtok(buf_copy + 1, " ");
-        strcpy(current_nick, nick);              // update current_nick
-        strcpy(msg, buf + strlen(buf_copy) + 1); // copy rest of message
-
-        client *found = find_client(nick);
-        if (found)
+        if (buf[0] == '@') // send msg @ client
         {
-            update_client_packet(packet_number++, nick, msg);
-            send_client_message(so, found->dest_addr);
+            char buf_copy[strlen(buf) + 1];
+            char msg[MAXMSGSIZE];
+            char *nick;
+
+            strcpy(buf_copy, buf);
+            nick = strtok(buf_copy + 1, " ");
+            strcpy(current_nick, nick);              // update current_nick
+            strcpy(msg, buf + strlen(buf_copy) + 1); // copy rest of message
+
+            client *found = find_client(nick);
+            if (found)
+            {
+                if (found->blocked)
+                {
+                    fprintf(stderr, "Client %s blocked, can't send message\n", nick);
+                    return 1;
+                }
+                else
+                {
+                    update_client_packet(packet_number++, nick, msg);
+                    send_client_message(so, found->dest_addr);
+                }
+            }
+            else
+            {
+                update_server_packet(nick);
+                send_server_message(so);
+                update_client_packet(packet_number++, nick, msg);
+            }
+            await_ack = 1; // wait response
         }
         else
         {
-            update_server_packet(nick);
-            send_server_message(so);
-            update_client_packet(packet_number++, nick, msg);
+            char *nick, *action;
+            char buf_copy[strlen(buf) + 1];
+            strcpy(buf_copy, buf);
+
+            action = strtok(buf_copy, " ");
+            nick = strtok(NULL, " ");
+
+            if (!action || !nick)
+            {
+                fprintf(stderr, "WRONG FORMAT\n");
+                return 1;
+            }
+            if (!strcmp(action, "BLOCK"))
+            {
+                set_client_block(nick, 1);
+            }
+            else if (!strcmp(action, "UNBLOCK"))
+            {
+                set_client_block(nick, 0);
+            }
         }
-        await_ack = 1; // wait response
 
         return 1;
     }
@@ -466,7 +515,7 @@ int main(int argc, char const *argv[])
             handle_socket(so);
         }
         curr_time = time(NULL);
-        if (curr_time - last_beat > HEARTBEAT)
+        if (curr_time - last_beat > HEARTBEAT && !await_ack)
         {
             send_heartbeat(so);
             last_beat = time(NULL);
