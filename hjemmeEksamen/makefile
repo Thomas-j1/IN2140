@@ -16,7 +16,7 @@ runServer: upush_server
 	./upush_server 4321 20
 
 valServer: upush_server
-	valgrind $(VFLAGS) ./upush_server 4321 50
+	valgrind $(VFLAGS) ./upush_server 4321 10
 
 upush_client: upush_client.o $(sharedFiles)
 	gcc $(CFLAGS) upush_client.c $(sharedFiles) -o upush_client

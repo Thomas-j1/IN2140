@@ -1,6 +1,7 @@
 #include "common.h"
 
-#define STALE 30
+#define STALE 5      // 30
+#define CLEANFREQ 10 // 60
 
 /**
  * @brief data struct for clients
@@ -12,7 +13,7 @@ typedef struct client
     char ip[INET_ADDRSTRLEN];
     int last_number;
     time_t time_last;
-    char nick[160];
+    char nick[20];
 } client;
 
 client *clients;
@@ -51,6 +52,45 @@ void lookup_nick(char *nick, char *response, char *number)
     }
 }
 
+void remove_client(int i)
+{
+    void *tmp;
+
+    for (int j = i; j < client_count; j++)
+    {
+        if (j < client_count - 1)
+        {
+            clients[j].port = clients[j + 1].port;
+            memcpy(clients[j].ip, clients[j + 1].ip, INET_ADDRSTRLEN);
+            clients[j].last_number = clients[j + 1].last_number;
+            clients[j].time_last = clients[j + 1].time_last;
+            strcpy(clients[j].nick, clients[j + 1].nick);
+        }
+    }
+    client_count--;
+    if (client_count)
+    {
+        tmp = realloc(clients, sizeof(client) * (client_count));
+        check_malloc_error(tmp);
+        clients = (client *)tmp;
+    }
+}
+
+void remove_outdated_clients()
+{
+    time_t curr_time = time(NULL);
+
+    for (int i = 0; i < client_count; i++)
+    {
+        if (curr_time - clients[i].time_last > STALE)
+        {
+            if (DEBUG)
+                printf("Removing stale client %s\n", clients[i].nick);
+            remove_client(i);
+        }
+    }
+}
+
 char *update_client_time(char *nick)
 {
     int exists = nick_exists(nick);
@@ -68,8 +108,10 @@ char *register_client(char *nick, struct sockaddr_in client_addr)
     int exists = nick_exists(nick);
     if (exists < 0)
     {
-        clients = (client *)realloc(clients, sizeof(client) * (++client_count));
-        check_malloc_error(clients);
+        void *tmp;
+        tmp = realloc(clients, sizeof(client) * (++client_count));
+        check_malloc_error(tmp);
+        clients = (client *)tmp;
         i = client_count - 1;
         strcpy(clients[i].nick, nick);
     }
@@ -78,7 +120,7 @@ char *register_client(char *nick, struct sockaddr_in client_addr)
         i = exists;
     }
 
-    memcpy(&clients[i].ip, inet_ntoa(client_addr.sin_addr), INET_ADDRSTRLEN);
+    memcpy(clients[i].ip, inet_ntoa(client_addr.sin_addr), INET_ADDRSTRLEN);
     clients[i].port = (int)ntohs(client_addr.sin_port);
     clients[i].last_number = 0;
     clients[i].time_last = time(NULL);
@@ -95,7 +137,7 @@ void print_clients()
     printf("Clients: \n");
     for (int i = 0; i < client_count; i++)
     {
-        printf(" Client %s:\n  ip: %s\n  port: %d\n, time: %li",
+        printf(" Client %s:\n  ip: %s\n  port: %d\n  time: %li\n",
                clients[i].nick, clients[i].ip, clients[i].port, clients[i].time_last);
     }
 }
@@ -121,7 +163,7 @@ char *handle_response(char *buf, struct sockaddr_in client_addr)
     check_malloc_error(response);
     memset(response, 0, BUFSIZE);
 
-    if (pkt == NULL)
+    if (!pkt || !number || !operation || !nick)
     {
         sprintf(response, "WRONG FORMAT");
     }
@@ -160,6 +202,7 @@ int main(int argc, char const *argv[])
     fd_set my_set;
     // struct timeval tv;
     socklen_t socklen = sizeof(struct sockaddr_in);
+    time_t last_clean;
 
     if (argc < 3)
     {
@@ -181,6 +224,7 @@ int main(int argc, char const *argv[])
     check_error(rc, "bind");
 
     FD_ZERO(&my_set);
+    last_clean = time(NULL);
 
     memset(buf, 0, BUFSIZE);
     while (strcmp(buf, "QUIT"))
@@ -205,12 +249,17 @@ int main(int argc, char const *argv[])
 
             if (response[0]) // response contains at least 1 char
             {
-                send_message(so, client_addr, response);
+                send_loss_message(so, client_addr, response);
                 if (DEBUG)
                     printf("\n");
             }
 
             free(response);
+        }
+        if (time(NULL) - last_clean > CLEANFREQ)
+        {
+            remove_outdated_clients();
+            last_clean = time(NULL);
         }
         if (FD_ISSET(STDIN_FILENO, &my_set))
         {
@@ -224,5 +273,6 @@ int main(int argc, char const *argv[])
 
     close(so);
     free(clients);
+
     return EXIT_SUCCESS;
 }

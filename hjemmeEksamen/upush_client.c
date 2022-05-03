@@ -103,6 +103,10 @@ void set_client_block(char *nick, int value)
         if (DEBUG)
             printf("set client %s blocked to %d\n", nick, value);
     }
+    else
+    {
+        fprintf(stderr, "Error unknown client\n");
+    }
 }
 
 void add_to_clients(struct sockaddr_in dest_addr, char *nick, int number)
@@ -425,6 +429,11 @@ int handle_stdin(int so)
             else if (!strcmp(action, "UNBLOCK"))
             {
                 set_client_block(nick, 0);
+            }
+            else
+            {
+                fprintf(stderr,
+                        "WRONG FORMAT\nUsage:\n <@nick> <msg>\n <BLOCK> <nick>\n <UNBLOCK> <nick>\n");
             }
         }
 
