@@ -297,6 +297,14 @@ void handle_pkt(int so, struct sockaddr_in dest_addr, char *type, char *number)
     client *found = find_client(pkt_nick);
     if (!found) // client unknown
     {
+        /**
+         * Could have replaced this with server lookup if not allowed to directly
+         * add client when receiving a msg:
+         * +update_server_packet(nick)
+         * +send_server_message(so)
+         * +set client_packet as ACK atoi(number) OK
+         * -add_to_clients(dest_addr, pkt_nick, atoi(number));
+         */
         add_to_clients(dest_addr, pkt_nick, atoi(number));
         printf("%s: %s\n", pkt_nick, msg);
     }
@@ -441,7 +449,7 @@ void handle_stdin_msg(int so, char *buf)
 
 int handle_stdin(int so)
 {
-    char buf[MAXBUFSIZE]; // + strlen(nick)
+    char buf[MAXBUFSIZE];
     int c;
     fgets(buf, MAXBUFSIZE, stdin);
     if (buf[strlen(buf) - 1] == '\n')
