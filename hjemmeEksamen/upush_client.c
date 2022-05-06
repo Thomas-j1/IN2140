@@ -8,12 +8,13 @@ typedef struct client
     struct client *next;
     struct sockaddr_in dest_addr;
     int last_number;
+    int my_last_number;
     int blocked;
     char nick[];
 } client;
 
 client *root;
-int packet_number = 0;
+int server_number = 0;
 char const *my_nick;
 char current_nick[MAXNICKSIZE];
 char client_packet[MAXBUFSIZE];
@@ -26,7 +27,7 @@ int await_client = 0;
 int await_server = 0;
 int retransmit_tries = 0;
 
-// local methods
+// ### local methods
 
 void reset_states()
 {
@@ -138,6 +139,40 @@ client *find_client(char *nick)
     return NULL;
 }
 
+int get_server_number()
+{
+    if (server_number)
+    {
+        server_number = 0;
+    }
+    else
+    {
+        server_number = 1;
+    }
+    return server_number;
+}
+
+int get_client_number(char *nick)
+{
+    client *found = find_client(nick);
+    if (found)
+    {
+        if (found->my_last_number)
+        {
+            found->my_last_number = 0;
+        }
+        else
+        {
+            found->my_last_number = 1;
+        }
+        return found->my_last_number;
+    }
+    else
+    {
+        return 0;
+    }
+}
+
 void set_client_block(char *nick, int value)
 {
     client *found = find_client(nick);
@@ -168,20 +203,21 @@ void add_to_clients(struct sockaddr_in dest_addr, char *nick, int number)
     new->dest_addr = dest_addr;
     strcpy(new->nick, nick);
     new->last_number = number;
+    new->my_last_number = 0;
     new->blocked = 0;
     new->next = NULL;
 
     tmp->next = new;
 }
 
-// sending methods
+// ### sending methods
+
 void register_with_server(const char *nick, int so, struct sockaddr_in dest_addr)
 {
     char buf[BUFSIZE];
     validate_nick(nick);
-    sprintf(buf, "PKT %d REG %s", packet_number++, nick);
+    sprintf(buf, "PKT %d REG %s", 0, nick);
     send_loss_message(so, dest_addr, buf);
-    // send_message(so, dest_addr, buf);
     await_ack = -1;
 }
 
@@ -207,12 +243,12 @@ void send_server_message(int so)
 
 void update_server_packet(char *nick)
 {
-    sprintf(server_packet, "PKT %d LOOKUP %s", packet_number++, nick);
+    sprintf(server_packet, "PKT %d LOOKUP %s", get_server_number(), nick);
 }
 
 void send_heartbeat(int so)
 {
-    sprintf(server_packet, "PKT %d BEAT %s", packet_number++, my_nick);
+    sprintf(server_packet, "PKT %d BEAT %s", get_server_number(), my_nick);
     send_server_message(so);
 }
 
@@ -258,7 +294,7 @@ int resend_last_packet(int so)
 // handling methods
 void handle_pkt(int so, struct sockaddr_in dest_addr, char *type, char *number)
 {
-    if (strcmp(type, "PKT")) // !pkt with message from other client
+    if (strcmp(type, "PKT")) // validate pkt with message from other client
     {
         return;
     }
@@ -273,7 +309,7 @@ void handle_pkt(int so, struct sockaddr_in dest_addr, char *type, char *number)
     char msg[MAXMSGSIZE], *msg_token;
     msg_token = strtok(NULL, " ");
     memset(msg, 0, sizeof(msg));
-    while (msg_token != NULL)
+    while (msg_token != NULL) // add rest of buff to msg
     {
         sprintf(msg + strlen(msg), "%s ", msg_token);
         msg_token = strtok(NULL, " ");
@@ -297,14 +333,6 @@ void handle_pkt(int so, struct sockaddr_in dest_addr, char *type, char *number)
     client *found = find_client(pkt_nick);
     if (!found) // client unknown
     {
-        /**
-         * Could have replaced this with server lookup if not allowed to directly
-         * add client when receiving a msg:
-         * +update_server_packet(nick)
-         * +send_server_message(so)
-         * +set client_packet as ACK atoi(number) OK
-         * -add_to_clients(dest_addr, pkt_nick, atoi(number));
-         */
         add_to_clients(dest_addr, pkt_nick, atoi(number));
         printf("%s: %s\n", pkt_nick, msg);
     }
@@ -434,7 +462,7 @@ void handle_stdin_msg(int so, char *buf)
         }
         else
         {
-            update_client_packet(packet_number++, nick, msg);
+            update_client_packet(get_client_number(nick), nick, msg);
             send_client_message(so, found->dest_addr);
         }
     }
@@ -442,7 +470,7 @@ void handle_stdin_msg(int so, char *buf)
     {
         update_server_packet(nick);
         send_server_message(so);
-        update_client_packet(packet_number++, nick, msg);
+        update_client_packet(get_client_number(nick), nick, msg);
     }
     await_ack = 1; // wait response
 }
@@ -586,7 +614,7 @@ int main(int argc, char const *argv[])
             handle_socket(so);
         }
         curr_time = time(NULL);
-        if (curr_time - last_beat > HEARTBEAT && !await_ack)
+        if (curr_time - last_beat > HEARTBEAT && !await_ack) // heartbeat
         {
             send_heartbeat(so);
             last_beat = time(NULL);

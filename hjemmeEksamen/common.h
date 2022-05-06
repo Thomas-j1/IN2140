@@ -41,7 +41,7 @@ void check_malloc_error(void *ptr);
 float convert_loss_probability(int n);
 
 /**
- * @brief Set the Loss Probability
+ * @brief Set the Loss Probability, and seed with srand48()
  *
  * @param arg loss probability argument from main
  */
@@ -49,8 +49,14 @@ void setup_loss_probability(const char *arg);
 
 void send_message(int so, struct sockaddr_in dest_addr, char *msg);
 
+/**
+ * @brief send msg to destination with send_packet
+ */
 void send_loss_message(int so, struct sockaddr_in dest_addr, char *msg);
 
+/**
+ * @brief send "ACK number OK" to dest_addr
+ */
 void send_ok(int so, struct sockaddr_in dest_addr, char *number);
 
 #endif
