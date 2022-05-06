@@ -16,7 +16,6 @@ static float loss_probability = 0.0f;
 void set_loss_probability(float x)
 {
     loss_probability = x;
-    srand48(2141513);
 }
 
 ssize_t send_packet(int sock, void *buffer, size_t size, int flags, struct sockaddr *addr, socklen_t addrlen)

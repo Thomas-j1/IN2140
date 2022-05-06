@@ -29,12 +29,12 @@ void setup_loss_probability(const char *arg)
 {
     unsigned short loss_probability;
     float floss_probability;
-
+    srand48(time(NULL));
     loss_probability = atoi(arg);
     floss_probability = convert_loss_probability(loss_probability);
     set_loss_probability(floss_probability);
     if (DEBUG)
-        printf("setup lpb: %f\n\n", floss_probability);
+        printf("setup loss probability: %f\n\n", floss_probability);
 }
 
 void send_message(int so, struct sockaddr_in dest_addr, char *msg)

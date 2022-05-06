@@ -5,12 +5,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <ctype.h>
 #include <arpa/inet.h>
 #include <sys/select.h>
 #include <time.h>
 
 #define BUFSIZE 250
-#define MAXBUFSIZE 1600
+#define MAXBUFSIZE 1500 // 1500
 #define MAXNICKSIZE 20
 #define DEBUG 1
 

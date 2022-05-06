@@ -1,6 +1,6 @@
 #include "common.h"
 
-#define MAXMSGSIZE 1400
+#define MAXMSGSIZE 1400 // 1400
 #define HEARTBEAT 10
 
 typedef struct client
@@ -55,6 +55,50 @@ struct sockaddr_in create_sockaddr(char *ip, char *port)
     addr.sin_addr = ip_addr;
 
     return addr;
+}
+
+void validate_nick(char const *nick)
+{
+    int invalid = 0;
+    if (strlen(nick) > MAXNICKSIZE)
+    {
+        invalid = 1;
+    }
+    for (size_t i = 0; i < strlen(nick); i++)
+    {
+        char curr_char = nick[i];
+        if (isspace(curr_char) || !isascii(curr_char))
+        {
+            invalid = 1;
+        }
+    }
+    if (invalid)
+    {
+        fprintf(stderr, "Nick is not valid\n");
+        exit(EXIT_FAILURE);
+    }
+}
+
+/**
+ * @return 0 if msg valid else 1
+ */
+int msg_not_valid(char *msg)
+{
+    int invalid = 0;
+
+    if (strlen(msg) > MAXMSGSIZE)
+    {
+        invalid = 1;
+    }
+    for (size_t i = 0; i < strlen(msg); i++)
+    {
+        char curr_char = msg[i];
+        if (!isascii(curr_char))
+        {
+            invalid = 1;
+        }
+    }
+    return invalid;
 }
 
 void free_clients()
@@ -134,9 +178,10 @@ void add_to_clients(struct sockaddr_in dest_addr, char *nick, int number)
 void register_with_server(const char *nick, int so, struct sockaddr_in dest_addr)
 {
     char buf[BUFSIZE];
+    validate_nick(nick);
     sprintf(buf, "PKT %d REG %s", packet_number++, nick);
-    // send_loss_message(so, dest_addr, buf); is supposed to be here but will never register with server
-    send_message(so, dest_addr, buf);
+    send_loss_message(so, dest_addr, buf);
+    // send_message(so, dest_addr, buf);
     await_ack = -1;
 }
 
@@ -213,7 +258,7 @@ int resend_last_packet(int so)
 // handling methods
 void handle_pkt(int so, struct sockaddr_in dest_addr, char *type, char *number)
 {
-    if (strcmp(type, "PKT")) // pkt with message from other client
+    if (strcmp(type, "PKT")) // !pkt with message from other client
     {
         return;
     }
@@ -235,11 +280,10 @@ void handle_pkt(int so, struct sockaddr_in dest_addr, char *type, char *number)
     }
     msg[strlen(msg) - 1] = 0; // remove trailing whitespace
 
-    if (!pkt_nick || !dest_nick || strlen(msg) < 1) // wrong format
+    if (!pkt_nick || !dest_nick || strlen(msg) < 1 || msg_not_valid(msg)) // wrong format
     {
         sprintf(ack_buf, "ACK %s WRONG FORMAT", number);
         send_loss_message(so, dest_addr, ack_buf);
-        fprintf(stderr, "Missing PKT data\n");
         return;
     }
     else if (strcmp(dest_nick, my_nick)) // wrong name
@@ -260,7 +304,7 @@ void handle_pkt(int so, struct sockaddr_in dest_addr, char *type, char *number)
     {
         // duplicate message?
         int n = atoi(number);
-        if (found->last_number != n && !found->blocked)
+        if (found->last_number != n && !found->blocked) // not duplicate msg or blocked client
         {
             printf("%s: %s\n", pkt_nick, msg);
             found->last_number = n;
@@ -272,7 +316,7 @@ void handle_ack(int so, char *type)
 {
     if (strcmp(type, "ACK"))
     {
-        return;
+        return; // only waiting for ack, throw other packages
     }
     // handle ack from number
 
@@ -330,24 +374,24 @@ void handle_ack(int so, char *type)
 void handle_socket(int so)
 {
     int rc;
-    char rbuf[MAXBUFSIZE];
+    char buf[MAXBUFSIZE];
     struct sockaddr_in dest_addr;
     socklen_t socklen = sizeof(struct sockaddr_in);
 
-    rc = recvfrom(so, rbuf, MAXBUFSIZE - 1, 0, (struct sockaddr *)&dest_addr, &socklen);
+    rc = recvfrom(so, buf, MAXBUFSIZE - 1, 0, (struct sockaddr *)&dest_addr, &socklen);
     check_error(rc, "recvfrom");
 
-    rbuf[rc] = '\0';
-    rbuf[strcspn(rbuf, "\n")] = 0;
+    buf[rc] = '\0';
+    buf[strcspn(buf, "\n")] = 0;
     if (DEBUG)
-        printf("Received %d bytes: %s\n\n", rc, rbuf);
+        printf("Received %d bytes: %s\n\n", rc, buf);
 
-    char *type = strtok(rbuf, " ");
+    char *type = strtok(buf, " ");
     char *number = strtok(NULL, " ");
 
-    if (!type || !number)
+    if (!type || !number || (strcmp(type, "PKT") && strcmp(type, "ACK")))
     {
-        fprintf(stderr, "Missing type/number data\n");
+        fprintf(stderr, "Recevied packet without type/number, throwing packet\n");
         return;
     }
     if (await_ack)
@@ -360,14 +404,53 @@ void handle_socket(int so)
     }
 }
 
+void handle_stdin_msg(int so, char *buf)
+{
+    char buf_copy[strlen(buf) + 1];
+    char msg[MAXMSGSIZE];
+    char *nick;
+
+    strcpy(buf_copy, buf);
+    nick = strtok(buf_copy + 1, " "); // +1 removes @
+    strcpy(current_nick, nick);       // update current_nick
+    memset(msg, 0, MAXMSGSIZE);
+    memcpy(msg, (buf + strlen(buf_copy) + 1), MAXMSGSIZE - 1); // ignore rest after 1400 bytes
+
+    client *found = find_client(nick);
+    if (found)
+    {
+        if (found->blocked)
+        {
+            fprintf(stderr, "Client %s blocked, can't send message\n", nick);
+            return;
+        }
+        else
+        {
+            update_client_packet(packet_number++, nick, msg);
+            send_client_message(so, found->dest_addr);
+        }
+    }
+    else
+    {
+        update_server_packet(nick);
+        send_server_message(so);
+        update_client_packet(packet_number++, nick, msg);
+    }
+    await_ack = 1; // wait response
+}
+
 int handle_stdin(int so)
 {
     char buf[MAXBUFSIZE]; // + strlen(nick)
-    // char c;
+    int c;
     fgets(buf, MAXBUFSIZE, stdin);
-    buf[strcspn(buf, "\n")] = 0; // if /n overwrite with 0
-    // while ((c = getchar()) != '\n' && c != EOF)
-    //   ; // remove excess buf
+    if (buf[strlen(buf) - 1] == '\n')
+    {
+        buf[strlen(buf) - 1] = '\0';
+    } // if /n overwrite with 0
+    else
+        while ((c = getchar()) != '\n' && c != EOF)
+            ; // remove excess buf
 
     if (!strcmp(buf, "QUIT"))
     {
@@ -377,36 +460,7 @@ int handle_stdin(int so)
     {
         if (buf[0] == '@') // send msg @ client
         {
-            char buf_copy[strlen(buf) + 1];
-            char msg[MAXMSGSIZE];
-            char *nick;
-
-            strcpy(buf_copy, buf);
-            nick = strtok(buf_copy + 1, " ");
-            strcpy(current_nick, nick);              // update current_nick
-            strcpy(msg, buf + strlen(buf_copy) + 1); // copy rest of message
-
-            client *found = find_client(nick);
-            if (found)
-            {
-                if (found->blocked)
-                {
-                    fprintf(stderr, "Client %s blocked, can't send message\n", nick);
-                    return 1;
-                }
-                else
-                {
-                    update_client_packet(packet_number++, nick, msg);
-                    send_client_message(so, found->dest_addr);
-                }
-            }
-            else
-            {
-                update_server_packet(nick);
-                send_server_message(so);
-                update_client_packet(packet_number++, nick, msg);
-            }
-            await_ack = 1; // wait response
+            handle_stdin_msg(so, buf);
         }
         else
         {

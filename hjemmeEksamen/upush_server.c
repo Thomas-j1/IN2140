@@ -1,7 +1,7 @@
 #include "common.h"
 
-#define STALE 5      // 30
-#define CLEANFREQ 10 // 60
+#define STALE 30     // 30
+#define CLEANFREQ 60 // 60
 
 /**
  * @brief data struct for clients
@@ -194,7 +194,7 @@ char *handle_response(char *buf, struct sockaddr_in client_addr)
 int main(int argc, char const *argv[])
 {
 
-    int so, rc, wc;
+    int so, rc;
     unsigned short port;
     char buf[BUFSIZE], *response;
     // struct in_addr ipadress;
@@ -256,7 +256,7 @@ int main(int argc, char const *argv[])
 
             free(response);
         }
-        if (time(NULL) - last_clean > CLEANFREQ)
+        if (time(NULL) - last_clean > CLEANFREQ) // remove stale entries
         {
             remove_outdated_clients();
             last_clean = time(NULL);
@@ -269,7 +269,7 @@ int main(int argc, char const *argv[])
     }
 
     if (DEBUG)
-        print_clients(clients);
+        print_clients();
 
     close(so);
     free(clients);
