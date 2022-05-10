@@ -11,7 +11,6 @@ typedef struct client
 {
     int port;
     char ip[INET_ADDRSTRLEN];
-    int last_number;
     time_t time_last;
     char nick[20];
 } client;
@@ -21,8 +20,6 @@ int client_count = 0;
 
 /**
  * @brief checks clients for nick
- *
- * @param nick
  * @return int index of client if exist else -1
  */
 int nick_exists(char *nick)
@@ -41,7 +38,7 @@ void lookup_nick(char *nick, char *response, char *number)
 {
     int exists = nick_exists(nick);
     time_t curr_time = time(NULL);
-    if (exists < 0 || curr_time - clients[exists].time_last > STALE)
+    if (exists < 0 || (curr_time - clients[exists].time_last) > STALE)
     {
         sprintf(response, "ACK %s NOT FOUND", number);
     }
@@ -52,6 +49,11 @@ void lookup_nick(char *nick, char *response, char *number)
     }
 }
 
+/**
+ * @brief overwrites values at client at index i,
+ * with values at i+1 until i = client_count
+ * then sets client_count-1 and reallocs with new smaller size
+ */
 void remove_client(int i)
 {
     void *tmp;
@@ -62,7 +64,6 @@ void remove_client(int i)
         {
             clients[j].port = clients[j + 1].port;
             memcpy(clients[j].ip, clients[j + 1].ip, INET_ADDRSTRLEN);
-            clients[j].last_number = clients[j + 1].last_number;
             clients[j].time_last = clients[j + 1].time_last;
             strcpy(clients[j].nick, clients[j + 1].nick);
         }
@@ -106,7 +107,7 @@ char *register_client(char *nick, struct sockaddr_in client_addr)
     int i;
     char *response;
     int exists = nick_exists(nick);
-    if (exists < 0)
+    if (exists < 0) // add new client
     {
         void *tmp;
         tmp = realloc(clients, sizeof(client) * (++client_count));
@@ -115,14 +116,13 @@ char *register_client(char *nick, struct sockaddr_in client_addr)
         i = client_count - 1;
         strcpy(clients[i].nick, nick);
     }
-    else // overwrite nick
+    else // overwrite existing nick/client
     {
         i = exists;
     }
 
     memcpy(clients[i].ip, inet_ntoa(client_addr.sin_addr), INET_ADDRSTRLEN);
     clients[i].port = (int)ntohs(client_addr.sin_port);
-    clients[i].last_number = 0;
     clients[i].time_last = time(NULL);
 
     printf("Registered client %s:\n  ip: %s\n  port: %d\n  time: %li\n",
@@ -144,10 +144,6 @@ void print_clients()
 
 /**
  * @brief handle response according to buffer
- *
- * @param buf read buffer
- * @param clients clients ptr
- * @param client_addr client socket
  * @return char response to send back to client, must be freed
  */
 char *handle_response(char *buf, struct sockaddr_in client_addr)
@@ -234,7 +230,7 @@ int main(int argc, char const *argv[])
         rc = select(FD_SETSIZE + 1, &my_set, NULL, NULL, NULL); //&tv);
         check_error(rc, "select");
 
-        if (FD_ISSET(so, &my_set))
+        if (FD_ISSET(so, &my_set)) // socket
         {
 
             rc = recvfrom(so, buf, BUFSIZE - 1, 0, (struct sockaddr *)&client_addr, &socklen);
@@ -261,7 +257,7 @@ int main(int argc, char const *argv[])
             remove_outdated_clients();
             last_clean = time(NULL);
         }
-        if (FD_ISSET(STDIN_FILENO, &my_set))
+        if (FD_ISSET(STDIN_FILENO, &my_set)) // stdin
         {
             fgets(buf, BUFSIZE, stdin);
             buf[strcspn(buf, "\n")] = 0; // if /n overwrite with 0

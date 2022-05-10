@@ -1,7 +1,7 @@
 #include "common.h"
 
 #define MAXMSGSIZE 1400 // 1400
-#define HEARTBEAT 10
+#define HEARTBEAT 10    // 10
 
 typedef struct client
 {
@@ -58,6 +58,10 @@ struct sockaddr_in create_sockaddr(char *ip, char *port)
     return addr;
 }
 
+/**
+ * @brief check if nick is in valid format.
+ * Exit program with error msg if invalid nick
+ */
 void validate_nick(char const *nick)
 {
     int invalid = 0;
@@ -123,6 +127,10 @@ void init_root()
     root->nick[0] = 0;
 }
 
+/**
+ * @brief find and return pointer to client
+ * or NULL if client not found
+ */
 client *find_client(char *nick)
 {
     client *tmp = root;
@@ -139,6 +147,10 @@ client *find_client(char *nick)
     return NULL;
 }
 
+/**
+ * @brief Get the outgoing server packet number
+ * and update it
+ */
 int get_server_number()
 {
     if (server_number)
@@ -152,6 +164,10 @@ int get_server_number()
     return server_number;
 }
 
+/**
+ * @brief Get the outgoing client packet number
+ * and update it, returns 0 if unregistered client
+ */
 int get_client_number(char *nick)
 {
     client *found = find_client(nick);
@@ -173,6 +189,9 @@ int get_client_number(char *nick)
     }
 }
 
+/**
+ * @brief Set block value for client with nick
+ */
 void set_client_block(char *nick, int value)
 {
     client *found = find_client(nick);
@@ -273,14 +292,14 @@ int resend_last_packet(int so)
             reset_states();
             return 1;
         }
-        else
+        else // resend last client packet
         {
             send_client_message(so, last_client_addr);
         }
     }
     else // only awaiting server lookup
     {
-        if (retransmit_tries >= 2)
+        if (retransmit_tries >= 2) // failed lookup 3 times
         {
             fprintf(stderr, "COULD NOT REACH SERVER AFTER 3 tries\nAborting...\n");
             return 0; // QUIT
@@ -292,6 +311,11 @@ int resend_last_packet(int so)
 }
 
 // handling methods
+
+/**
+ * @brief handle incoming packet @socket
+ * with msg from client
+ */
 void handle_pkt(int so, struct sockaddr_in dest_addr, char *type, char *number)
 {
     if (strcmp(type, "PKT")) // validate pkt with message from other client
@@ -329,7 +353,7 @@ void handle_pkt(int so, struct sockaddr_in dest_addr, char *type, char *number)
         return;
     }
 
-    send_ok(so, dest_addr, number);
+    send_ok(so, dest_addr, number); // send ack ok response
     client *found = find_client(pkt_nick);
     if (!found) // client unknown
     {
@@ -348,6 +372,10 @@ void handle_pkt(int so, struct sockaddr_in dest_addr, char *type, char *number)
     }
 }
 
+/**
+ * @brief handle incoming packet @socket,
+ * when waiting for response to outgoing packet
+ */
 void handle_ack(int so, char *type)
 {
     if (strcmp(type, "ACK"))
@@ -381,13 +409,13 @@ void handle_ack(int so, char *type)
         char *ip = strtok(NULL, " ");
         strtok(NULL, " "); // PORT
         char *port = strtok(NULL, " ");
-        if (!nick || !ip || !port)
+        if (!nick || !ip || !port) // missing data
         {
             fprintf(stderr, "Missing NICK data\n");
             return;
         }
         await_server = 0;
-        if (!await_client)
+        if (!await_client) // no outgoing msg waiting to be sent
         {
             reset_states();
         }
@@ -399,7 +427,7 @@ void handle_ack(int so, char *type)
         {
             add_to_clients(current_dest_addr, nick, -1);
         }
-        else
+        else // overwrite existing client dest_addr
         {
             found->dest_addr = current_dest_addr;
         }
@@ -407,6 +435,10 @@ void handle_ack(int so, char *type)
     }
 }
 
+/**
+ * @brief read incoming packet @socket
+ * and handle packet
+ */
 void handle_socket(int so)
 {
     int rc;
@@ -430,16 +462,19 @@ void handle_socket(int so)
         fprintf(stderr, "Recevied packet without type/number, throwing packet\n");
         return;
     }
-    if (await_ack)
-    { // handle ack
+    if (await_ack) // waiting for response to outgoing packet
+    {              // handle ack
         handle_ack(so, type);
     }
-    else // handle pkt
+    else // handle pkt with msg
     {
         handle_pkt(so, dest_addr, type, number);
     }
 }
 
+/**
+ * @brief handle msg to client from stdin
+ */
 void handle_stdin_msg(int so, char *buf)
 {
     char buf_copy[strlen(buf) + 1];
@@ -460,13 +495,13 @@ void handle_stdin_msg(int so, char *buf)
             fprintf(stderr, "Client %s blocked, can't send message\n", nick);
             return;
         }
-        else
+        else // send msg
         {
             update_client_packet(get_client_number(nick), nick, msg);
             send_client_message(so, found->dest_addr);
         }
     }
-    else
+    else // unknown client, do server lookup
     {
         update_server_packet(nick);
         send_server_message(so);
@@ -475,6 +510,9 @@ void handle_stdin_msg(int so, char *buf)
     await_ack = 1; // wait response
 }
 
+/**
+ * @brief handle data from stdin
+ */
 int handle_stdin(int so)
 {
     char buf[MAXBUFSIZE];
@@ -512,11 +550,11 @@ int handle_stdin(int so)
                 fprintf(stderr, "WRONG FORMAT\n");
                 return 1;
             }
-            if (!strcmp(action, "BLOCK"))
+            if (!strcmp(action, "BLOCK")) // block nick
             {
                 set_client_block(nick, 1);
             }
-            else if (!strcmp(action, "UNBLOCK"))
+            else if (!strcmp(action, "UNBLOCK")) // unblock nick
             {
                 set_client_block(nick, 0);
             }
@@ -543,7 +581,7 @@ int main(int argc, char const *argv[])
     struct timeval tv;
     time_t last_beat, curr_time;
 
-    init_root();
+    init_root(); // init known clients linked list root
 
     if (argc < 6)
     {
@@ -605,13 +643,13 @@ int main(int argc, char const *argv[])
                 main_event_loop = resend_last_packet(so);
             }
         }
-        else if (FD_ISSET(STDIN_FILENO, &my_set) && !await_ack && !await_client)
-        {
-            main_event_loop = handle_stdin(so);
-        }
-        else if (FD_ISSET(so, &my_set))
+        if (FD_ISSET(so, &my_set))
         {
             handle_socket(so);
+        }
+        if (FD_ISSET(STDIN_FILENO, &my_set) && !await_ack && !await_client)
+        {
+            main_event_loop = handle_stdin(so);
         }
         curr_time = time(NULL);
         if (curr_time - last_beat > HEARTBEAT && !await_ack) // heartbeat

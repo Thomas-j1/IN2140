@@ -12,7 +12,7 @@
 
 #define BUFSIZE 250
 #define MAXBUFSIZE 1500 // 1500
-#define MAXNICKSIZE 20
+#define MAXNICKSIZE 20  // 20
 #define DEBUG 1
 
 /**
@@ -47,6 +47,11 @@ float convert_loss_probability(int n);
  */
 void setup_loss_probability(const char *arg);
 
+/**
+ * @brief send message without packet loss, only used for debugging.
+ * If left in code, should have been replaced with send_loss_message
+ *
+ */
 void send_message(int so, struct sockaddr_in dest_addr, char *msg);
 
 /**
