@@ -358,7 +358,14 @@ void handle_pkt(int so, struct sockaddr_in dest_addr, char *type, char *number)
     if (!found) // client unknown
     {
         add_to_clients(dest_addr, pkt_nick, atoi(number));
-        printf("%s: %s\n", pkt_nick, msg);
+        if (DEBUG) // print with color to easier see with debug
+        {
+            printf(CYN "%s: %s\n" RESET, pkt_nick, msg);
+        }
+        else
+        {
+            printf("%s: %s\n", pkt_nick, msg);
+        }
     }
     else
     {
@@ -366,7 +373,14 @@ void handle_pkt(int so, struct sockaddr_in dest_addr, char *type, char *number)
         int n = atoi(number);
         if (found->last_number != n && !found->blocked) // not duplicate msg or blocked client
         {
-            printf("%s: %s\n", pkt_nick, msg);
+            if (DEBUG) // print with color to easier see with debug
+            {
+                printf(CYN "%s: %s\n" RESET, pkt_nick, msg);
+            }
+            else
+            {
+                printf("%s: %s\n", pkt_nick, msg);
+            }
             found->last_number = n;
         }
     }
@@ -452,7 +466,7 @@ void handle_socket(int so)
     buf[rc] = '\0';
     buf[strcspn(buf, "\n")] = 0;
     if (DEBUG)
-        printf("Received %d bytes: %s\n\n", rc, buf);
+        printf(GRN "Received %d bytes: %s\n" RESET "\n", rc, buf);
 
     char *type = strtok(buf, " ");
     char *number = strtok(NULL, " ");
@@ -462,11 +476,11 @@ void handle_socket(int so)
         fprintf(stderr, "Recevied packet without type/number, throwing packet\n");
         return;
     }
-    if (await_ack) // waiting for response to outgoing packet
-    {              // handle ack
+    if (!strcmp(type, "ACK")) // waiting for response to outgoing packet
+    {                         // handle ack
         handle_ack(so, type);
     }
-    else // handle pkt with msg
+    else if (!strcmp(type, "PKT")) // handle pkt with msg
     {
         handle_pkt(so, dest_addr, type, number);
     }

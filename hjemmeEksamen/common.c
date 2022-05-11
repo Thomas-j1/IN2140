@@ -57,13 +57,23 @@ void send_loss_message(int so, struct sockaddr_in dest_addr, char *msg)
     int rc;
 
     if (DEBUG)
-        printf("Attempting to send message: %s\n", msg);
+    {
+        printf(YEL "Attempting to send message: %s\n", msg);
+        printf(RED);
+        fflush(stdout);
+    }
+
     rc = send_packet(so,
                      msg,
                      strlen(msg),
                      0,
                      (struct sockaddr *)&dest_addr,
                      sizeof(struct sockaddr_in));
+    if (DEBUG)
+    {
+        printf(RESET);
+        fflush(stdout);
+    }
     check_error(rc, "sendto");
 }
 

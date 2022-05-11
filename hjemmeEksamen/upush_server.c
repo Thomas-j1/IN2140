@@ -239,7 +239,7 @@ int main(int argc, char const *argv[])
             buf[rc] = '\0';
             buf[strcspn(buf, "\n")] = 0; // if /n overwrite with 0
             if (DEBUG)
-                printf("Received %d bytes: %s\n", rc, buf);
+                printf(GRN "Received %d bytes: %s\n" RESET, rc, buf);
 
             response = handle_response(buf, client_addr);
 
