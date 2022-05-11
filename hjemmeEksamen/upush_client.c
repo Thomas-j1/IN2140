@@ -35,7 +35,7 @@ struct in_flight *flight_root;
 struct msg_que *msg_que_root;
 int server_number = 0;
 char const *my_nick;
-char current_nick[MAXNICKSIZE];
+char current_lookup_nick[MAXNICKSIZE];
 
 struct sockaddr_in server_addr;
 
@@ -301,16 +301,6 @@ void register_with_server(const char *nick, int so, struct sockaddr_in dest_addr
     await_ack = -1;
 }
 
-void create_client_packet(char *buf, char number, char *nick, char *msg)
-{
-    sprintf(buf, "PKT %d FROM %s TO %s MSG %s", number, my_nick, nick, msg);
-}
-
-void create_server_lookup_packet(char *buf, char *nick)
-{
-    sprintf(buf, "PKT %d LOOKUP %s", get_server_number(), nick);
-}
-
 void send_heartbeat(int so)
 {
     char server_packet[BUFSIZE];
@@ -352,7 +342,7 @@ int looking_up(char *nick)
     return 0;
 }
 
-void add_to_flight(char *nick, char *msg, struct sockaddr_in dest_addr, int is_lookup)
+struct in_flight *add_to_flight(char *nick, char *msg, struct sockaddr_in dest_addr, int is_lookup)
 {
     struct in_flight *tmp = flight_root;
 
@@ -373,6 +363,7 @@ void add_to_flight(char *nick, char *msg, struct sockaddr_in dest_addr, int is_l
     new->next = NULL;
 
     tmp->next = new;
+    return new;
 }
 
 void remove_from_flight(char *nick, int is_lookup)
@@ -421,6 +412,28 @@ void remove_from_flight_addr(struct sockaddr_in from_addr, int failed_lookup)
     }
 }
 
+void remove_from_msg_que(char *nick)
+{
+    struct msg_que *tmp = msg_que_root;
+    struct msg_que *last = tmp;
+    tmp = tmp->next;
+    while (tmp)
+    {
+        if (!strcmp(tmp->nick, nick))
+        {
+            last->next = tmp->next;
+            free(tmp->msg);
+            free(tmp);
+            break;
+        }
+        else
+        {
+            last = tmp;
+            tmp = tmp->next;
+        }
+    }
+}
+
 void add_to_msg_que(char *nick, char *msg)
 {
     struct msg_que *tmp = msg_que_root;
@@ -439,6 +452,17 @@ void add_to_msg_que(char *nick, char *msg)
     new->next = NULL;
 
     tmp->next = new;
+}
+
+struct in_flight *add_server_lookup_packet(char *nick)
+{
+    char server_packet[BUFSIZE];
+    memset(server_packet, 0, BUFSIZE);
+    sprintf(server_packet, "PKT %d LOOKUP %s", get_server_number(), nick);
+    struct in_flight *packet = add_to_flight(nick, server_packet, server_addr, 1);
+    strcpy(current_lookup_nick, nick); // update current_lookup_nick
+    await_ack = 1;
+    return packet;
 }
 
 void send_in_que()
@@ -473,11 +497,11 @@ void send_in_que()
             }
             else
             {
-                char server_packet[BUFSIZE];
-                memset(server_packet, 0, BUFSIZE);
-                sprintf(server_packet, "PKT %d LOOKUP %s", get_server_number(), tmp->nick);
-                add_to_flight(tmp->nick, server_packet, server_addr, 1);
-                last = tmp;
+                if (!await_ack)
+                {
+                    add_server_lookup_packet(tmp->nick);
+                    last = tmp;
+                }
             }
         }
         else
@@ -497,13 +521,26 @@ int send_all_out(int so)
     {
         if (tmp->is_lookup)
         {
-            if (tmp->tries >= 3) // failed lookup 3 times
+            if (tmp->tries >= 3 && tmp->tries < 6) // failed lookup 3 times
             {
                 fprintf(stderr, "COULD NOT REACH SERVER AFTER 3 tries\nAborting...\n");
                 return 0; // QUIT
             }
-            send_loss_message(so, server_addr, tmp->msg);
-            tmp->tries += 1;
+            else if (tmp->tries == 7) // no response on other lookup
+            {
+                fprintf(stderr, "NICK %s UNREACHABLE\n", tmp->nick);
+                // remove this from flight root
+                struct in_flight *tmp2 = tmp->next;
+                remove_from_flight(tmp->nick, 0);
+                remove_from_flight(tmp->nick, 1);
+                tmp = tmp2;
+                continue;
+            }
+            else
+            {
+                send_loss_message(so, server_addr, tmp->msg);
+                tmp->tries += 1;
+            }
         }
         else
         {
@@ -514,21 +551,21 @@ int send_all_out(int so)
             }
             if (tmp->tries == 2) // lookup client again
             {
-                char server_packet[BUFSIZE];
-                create_server_lookup_packet(server_packet, tmp->nick);
-                add_to_flight(tmp->nick, server_packet, server_addr, 1);
+                if (!await_ack)
+                {
+                    struct in_flight *packet = add_server_lookup_packet(tmp->nick);
+                    packet->tries = 6;
+                    tmp->tries++;
+                }
             }
-            else if (tmp->tries > 2) // no response on lookup
+            else if (tmp->tries > 4) // lost packets after successful lookup
             {
-                fprintf(stderr, "NICK %s UNREACHABLE\n", current_nick);
+                fprintf(stderr, "NICK %s UNREACHABLE\n", tmp->nick);
                 // remove this from flight root
+                struct in_flight *tmp2 = tmp->next;
                 remove_from_flight(tmp->nick, 0);
-            }
-            else if (tmp->tries > 3) // lost packets after successful lookup
-            {
-                fprintf(stderr, "NICK %s UNREACHABLE\n", current_nick);
-                // remove this from flight root
-                remove_from_flight(tmp->nick, 0);
+                tmp = tmp2;
+                continue;
             }
             else // resend last client packet
             {
@@ -630,14 +667,16 @@ void handle_ack(struct sockaddr_in from_addr)
 
     if (!strcmp(action, "OK")) // ack ok
     {
-        reset_states();
         remove_from_flight_addr(from_addr, 0);
+        reset_states();
     }
     else if (!strcmp(action, "NOT")) // did not find client
     {
         // send_ok(so, dest_addr, number);
-        fprintf(stderr, "NICK %s NOT REGISTERED\n", current_nick);
+        fprintf(stderr, "NICK %s NOT REGISTERED\n", current_lookup_nick);
         remove_from_flight_addr(from_addr, 1);
+        remove_from_msg_que(current_lookup_nick);
+        reset_states();
     }
     else if (!strcmp(action, "NICK")) // found nickname
     {
@@ -654,6 +693,7 @@ void handle_ack(struct sockaddr_in from_addr)
         }
 
         remove_from_flight(nick, 1);
+        reset_states();
 
         struct sockaddr_in current_dest_addr = create_sockaddr(ip, port);
 
@@ -728,10 +768,6 @@ void handle_stdin_msg(char *buf)
             fprintf(stderr, "Client %s blocked, can't send message\n", nick);
             return;
         }
-    }
-    else
-    {
-        strcpy(current_nick, nick); // update current_nick
     }
     add_to_msg_que(nick, msg);
 }
@@ -846,14 +882,9 @@ int main(int argc, char const *argv[])
     {
         tv.tv_sec = timeout;
         tv.tv_usec = 0;
-        if (!await_ack) // block reading from stdin
-        {
-            FD_SET(STDIN_FILENO, &my_set);
-        }
-        else
-        {
-            FD_CLR(STDIN_FILENO, &my_set);
-        }
+
+        FD_SET(STDIN_FILENO, &my_set);
+
         FD_SET(so, &my_set);
         rc = select(FD_SETSIZE, &my_set, NULL, NULL, &tv);
         check_error(rc, "select");
