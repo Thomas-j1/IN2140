@@ -1,7 +1,7 @@
 #include "common.h"
 
-#define STALE 30     // 30
-#define CLEANFREQ 60 // 60
+#define STALE 30            // 30
+#define CLEANFREQ STALE * 3 // 90
 
 /**
  * @brief data struct for clients
