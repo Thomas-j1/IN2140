@@ -491,7 +491,7 @@ struct msg_que *send_client_pkt(int so, struct msg_que *msg, char *nick)
         }
         else if (msg->tries == 7) // no response on lookup after 2 failed messages
         {
-            fprintf(stderr, "NICK %s UNREACHABLE, NO RESPONSE FROM SERVER LOOKUP\n",
+            fprintf(stderr, "NICK %s UNREACHABLE: No response from server lookup\n",
                     msg->nick);
             // remove this & pkt to nick from msg que
             remove_from_que(msg->nick, 0, 1); // msg pkt
@@ -637,8 +637,8 @@ void handle_pkt(int so, struct sockaddr_in dest_addr, char *number)
             {
                 printf("%s: %s\n", pkt_nick, msg);
             }
-            found->last_number = n;
         }
+        found->last_number = n;
     }
 }
 
@@ -808,6 +808,7 @@ void handle_stdin()
             if (!action || !nick)
             {
                 fprintf(stderr, "WRONG FORMAT\n");
+                return;
             }
             if (!strcmp(action, "BLOCK")) // block nick
             {
@@ -835,7 +836,7 @@ int main(int argc, char const *argv[])
     fd_set my_set;
     struct sockaddr_in my_addr;
     struct timeval tv;
-    time_t last_beat, curr_time;
+    time_t last_beat, last_send, curr_time;
 
     init_roots(); // init known clients linked list root
 
@@ -869,6 +870,7 @@ int main(int argc, char const *argv[])
     FD_ZERO(&my_set);
     printf("Messaging service usage:<@user> <msg>\n\n");
 
+    last_send = time(NULL);
     last_beat = time(NULL);
     memset(buf, 0, BUFSIZE);
     while (main_event_loop)
@@ -891,6 +893,17 @@ int main(int argc, char const *argv[])
             else // resend
             {
                 add_to_flight(so);
+                last_send = time(NULL);
+            }
+        }
+        else
+        {
+            // for stopping a flooding socket from blocking sending of messages
+            curr_time = time(NULL);
+            if (curr_time - last_send > timeout)
+            {
+                add_to_flight(so);
+                last_send = time(NULL);
             }
         }
         if (FD_ISSET(so, &my_set))
