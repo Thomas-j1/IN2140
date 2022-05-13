@@ -664,8 +664,9 @@ void handle_ack(struct sockaddr_in from_addr)
     else if (!strcmp(action, "NOT")) // did not find client
     {
         fprintf(stderr, "NICK %s NOT REGISTERED\n", current_lookup_nick);
-        remove_from_que(current_lookup_nick, 0, 0);
-        remove_from_que(current_lookup_nick, 1, 1);
+        remove_from_que(current_lookup_nick, 0, 0); // remove nick if in que
+        remove_from_que(current_lookup_nick, 0, 1); // remove nick if in flight
+        remove_from_que(current_lookup_nick, 1, 1); // remove nick from lookup
     }
     else if (!strcmp(action, "NICK")) // found nickname
     {
