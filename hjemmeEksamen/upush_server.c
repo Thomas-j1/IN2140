@@ -227,7 +227,7 @@ int main(int argc, char const *argv[])
     {
         FD_SET(so, &my_set);
         FD_SET(STDIN_FILENO, &my_set);
-        rc = select(FD_SETSIZE + 1, &my_set, NULL, NULL, NULL); //&tv);
+        rc = select(FD_SETSIZE + 1, &my_set, NULL, NULL, NULL);
         check_error(rc, "select");
 
         if (FD_ISSET(so, &my_set)) // socket

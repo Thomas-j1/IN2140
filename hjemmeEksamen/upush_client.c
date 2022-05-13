@@ -875,37 +875,27 @@ int main(int argc, char const *argv[])
     memset(buf, 0, BUFSIZE);
     while (main_event_loop)
     {
-        tv.tv_sec = timeout;
+        tv.tv_sec = 1; // timeout select every second to check for sending
         tv.tv_usec = 0;
 
         FD_SET(STDIN_FILENO, &my_set);
-
         FD_SET(so, &my_set);
         rc = select(FD_SETSIZE, &my_set, NULL, NULL, &tv);
         check_error(rc, "select");
-        if (rc == 0) // fds are empty after timeout
+
+        curr_time = time(NULL);
+        // send/handle messages with timeout interval
+        if (curr_time - last_send > timeout)
         {
             if (main_event_loop < 0) // could not register with server
             {
                 fprintf(stderr, "Could not register with server\nABORTING...\n");
                 break;
             }
-            else // resend
-            {
-                add_to_flight(so);
-                last_send = time(NULL);
-            }
+            add_to_flight(so);
+            last_send = time(NULL);
         }
-        else
-        {
-            // for stopping a flooding socket from blocking sending of messages
-            curr_time = time(NULL);
-            if (curr_time - last_send > timeout)
-            {
-                add_to_flight(so);
-                last_send = time(NULL);
-            }
-        }
+
         if (FD_ISSET(so, &my_set))
         {
             handle_socket(so);
