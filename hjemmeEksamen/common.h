@@ -14,7 +14,7 @@
 #define BUFSIZE 250
 #define MAXBUFSIZE 1500 // 1500
 #define MAXNICKSIZE 20  // 20
-#define DEBUG 1         // if 1 enable printing incoming and outgoing packets with colors!
+#define DEBUG 0         // if 1 enable printing incoming and outgoing packets with colors!
 
 // colors used in debugging
 #define CYN "\x1B[36m"

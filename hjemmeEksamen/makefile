@@ -1,7 +1,7 @@
 CFLAGS = -g -std=gnu11 -Wall -Wextra
 VFLAGS = --leak-check=full --track-origins=yes --show-leak-kinds=all --malloc-fill=0x40 --free-fill=0x23
-BIN = upush_server upush_client tests
-OFILES = upush_server.o upush_client.o tests.o common.o
+BIN = upush_server upush_client 
+OFILES = upush_server.o upush_client.o common.o
 sharedFiles = preCode/send_packet.c common.o
 
 all: $(BIN)
@@ -29,18 +29,6 @@ runClient: upush_client
 
 valClient: upush_client
 	valgrind $(VFLAGS) ./upush_client valgrind 127.0.0.1 4321 1 20
-
-tests: tests.o $(sharedFiles)
-	gcc $(CFLAGS) tests.c $(sharedFiles) -o tests
-
-tests.o: tests.c
-	gcc $(CFLAGS) -c tests.c
-
-runTest: tests
-	./tests 4321 20
-
-valTest: tests
-	valgrind $(VFLAGS) ./tests 4322 20
 
 common.o: common.c common.h
 	gcc $(CFLAGS) -c common.c
